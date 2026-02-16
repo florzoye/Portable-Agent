@@ -2,10 +2,14 @@ import logging
 from typing import Optional, Union
 from contextlib import asynccontextmanager
 
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from db.sqlalchemy.models import Base
 from db.sqlite.manager import AsyncDatabaseManager
 from db.database_protocol import UsersBase, GoogleTokensBase
 
+from src.enum.db import DatabaseType
 from src.factories.repository_factory import repository_factory
 
 class Database:
@@ -22,9 +26,9 @@ class Database:
 
         self.db_type = DB_CONFIG.DB_TYPE
 
-        if self.db_type == "sqlite":
+        if self.db_type == DatabaseType.SQLITE.value:
             await self._setup_sqlite(DB_CONFIG)
-        elif self.db_type == "postgresql":
+        elif self.db_type == DatabaseType.POSTGRESQL.value:
             await self._setup_postgresql(DB_CONFIG)
         else:
             raise ValueError(f"Unsupported DB_TYPE: {self.db_type}")
@@ -40,9 +44,9 @@ class Database:
         self.logger.debug(f"SQLite connected: {DB_CONFIG.SQLITE_PATH}")
 
     async def _setup_postgresql(self, DB_CONFIG):
-        from db.sqlalchemy.session import SQLAlchemyManager
+        from db.sqlalchemy.session import sqlalchemy_manager
 
-        self.sqlalchemy_manager = SQLAlchemyManager()
+        self.sqlalchemy_manager = sqlalchemy_manager
         self.sqlalchemy_manager.init()
         self.logger.debug("PostgreSQL manager initialized")
 
@@ -50,7 +54,7 @@ class Database:
         if not self._initialized:
             raise RuntimeError("Database not initialized. Call await database.setup() first")
 
-        if self.db_type == "sqlite":
+        if self.db_type == DatabaseType.SQLITE.value:
             return self.sqlite_manager
         else:
             return self.sqlalchemy_manager.get_session()
@@ -94,18 +98,46 @@ class Database:
         return repository_factory.create_tokens_repo(session)
 
     async def create_tables(self):
-        """Создать все таблицы"""
-        session = self.get_session()
+        if not self._initialized:
+            raise RuntimeError("Database not initialized")
         
-        users_repo = self.get_users_repo(session)
-        tokens_repo = self.get_tokens_repo(session)
-        
-        await users_repo.create_tables()
-        
-        if self.db_type == "sqlite":
-            await tokens_repo.create_tables()
-        
+        if self.db_type == DatabaseType.SQLITE.value:
+            async with self.transaction() as session:
+                session = self.get_session()
+                users_repo = self.get_users_repo(session)
+                tokens_repo = self.get_tokens_repo(session)
+
+                await users_repo.create_tables()
+                await tokens_repo.create_tables()
+
+        elif self.db_type == DatabaseType.POSTGRESQL.value:
+            engine = self.sqlalchemy_manager.get_engine()
+
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+
         self.logger.info("✅ All tables created")
+    
+    async def drop_tables(self):
+        if not self._initialized:
+            raise RuntimeError("Database not initialized")
+        
+        if self.db_type == DatabaseType.POSTGRESQL.value:
+            engine = self.sqlalchemy_manager.get_engine()
+
+            async with engine.begin() as conn:
+                await conn.execute(text("DROP SCHEMA public CASCADE"))
+                await conn.execute(text("CREATE SCHEMA public"))
+
+            self.logger.info("✅ Database schema fully reset")
+        else:
+            async with self.transaction() as session:
+                users_repo = self.get_users_repo(session)
+                tokens_repo = self.get_tokens_repo(session)
+
+                await users_repo.delete_all_tables()
+                await tokens_repo.delete_all_tables()
+            self.logger.info("✅ Database schema fully reset")
 
     async def close(self):
         if self.sqlite_manager:

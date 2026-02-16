@@ -1,7 +1,9 @@
+from datetime import datetime
 from abc import ABC, abstractmethod
 from typing import Optional, Any, List
-from datetime import datetime
 
+from src.models.user_model import UserModel
+from src.models.token_model import TokenModel
 
 class UsersBase(ABC):
     """Базовый интерфейс для работы с пользователями"""
@@ -15,10 +17,11 @@ class UsersBase(ABC):
     async def add_user(
         self,
         tg_id: int,
+        *,
         tg_nick: Optional[str] = None,
         email: Optional[str] = None,
         google_id: Optional[str] = None
-    ) -> Optional[Any]:
+    ) -> Optional[UserModel]:
         """
         Добавить пользователя
         
@@ -28,22 +31,22 @@ class UsersBase(ABC):
         ...
 
     @abstractmethod
-    async def get_user_by_tg_id(self, tg_id: int) -> Optional[Any]:
+    async def get_user_by_tg_id(self, tg_id: int) -> Optional[UserModel]:
         """Получить пользователя по Telegram ID"""
         ...
 
     @abstractmethod
-    async def get_user_by_id(self, user_id: int) -> Optional[Any]:
+    async def get_user_by_id(self, user_id: int) -> Optional[UserModel]:
         """Получить пользователя по внутреннему ID"""
         ...
 
     @abstractmethod
-    async def get_user_by_google_id(self, google_id: str) -> Optional[Any]:
+    async def get_user_by_google_id(self, google_id: str) -> Optional[UserModel]:
         """Получить пользователя по Google ID"""
         ...
 
     @abstractmethod
-    async def get_all_users(self) -> List[Any]:
+    async def get_all_users(self) -> List[UserModel]:
         """Получить всех пользователей"""
         ...
 
@@ -110,17 +113,17 @@ class GoogleTokensBase(ABC):
         ...
 
     @abstractmethod
-    async def get_token(self, user_id: int) -> Optional[Any]:
+    async def get_token(self, user_id: int) -> Optional[TokenModel]:
         """
         Получить токен по user_id
         
         Returns:
-            Optional[Any]: TokenModel для SQLite или GoogleToken для PostgreSQL
+            Optional[TokenModel]: TokenModel для SQLite или GoogleToken для PostgreSQL
         """
         ...
 
     @abstractmethod
-    async def get_token_by_tg_id(self, tg_id: int) -> Optional[Any]:
+    async def get_token_by_tg_id(self, tg_id: int) -> Optional[TokenModel]:
         """
         Получить токен по Telegram ID
         

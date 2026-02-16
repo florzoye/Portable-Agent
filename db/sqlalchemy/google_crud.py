@@ -4,9 +4,9 @@ from datetime import datetime
 from sqlalchemy import select, update, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.sqlalchemy.models import GoogleToken, Users
+from src.models.token_model import TokenModel
 from db.database_protocol import GoogleTokensBase
-
+from db.sqlalchemy.models import GoogleToken, Users
 
 class GoogleTokensORM(GoogleTokensBase):
     def __init__(self, session: AsyncSession):
@@ -14,9 +14,7 @@ class GoogleTokensORM(GoogleTokensBase):
         self.logger = logging.getLogger(self.__class__.__name__)
 
     async def create_tables(self) -> bool:
-        """Таблицы создаются через Base.metadata.create_all в UsersORM"""
-        self.logger.info("✅ Таблица tokens создается через SQLAlchemy Base")
-        return True
+        ...
 
     async def save_token(
         self,
@@ -54,7 +52,7 @@ class GoogleTokensORM(GoogleTokensBase):
             self.logger.error(f"❌ Ошибка при сохранении токена для пользователя {user_id}: {e}", exc_info=True)
             return False
 
-    async def get_token(self, user_id: int) -> Optional[GoogleToken]:
+    async def get_token(self, user_id: int) -> Optional[TokenModel]:
         try:
             result = await self.session.execute(
                 select(GoogleToken)
@@ -62,12 +60,13 @@ class GoogleTokensORM(GoogleTokensBase):
                 .order_by(GoogleToken.created_at.desc())
                 .limit(1)
             )
-            return result.scalar_one_or_none()
+            token = result.scalar_one_or_none()
+            return TokenModel.model_validate(token) if token else None
         except Exception as e:
             self.logger.error(f"❌ Ошибка при получении токена для пользователя {user_id}: {e}")
             return None
 
-    async def get_token_by_tg_id(self, tg_id: int) -> Optional[GoogleToken]:
+    async def get_token_by_tg_id(self, tg_id: int) -> Optional[TokenModel]:
         try:
             result = await self.session.execute(
                 select(GoogleToken)
@@ -76,7 +75,8 @@ class GoogleTokensORM(GoogleTokensBase):
                 .order_by(GoogleToken.created_at.desc())
                 .limit(1)
             )
-            return result.scalar_one_or_none()
+            token = result.scalar_one_or_none()
+            return TokenModel.model_validate(token) if token else None
         except Exception as e:
             self.logger.error(f"❌ Ошибка при получении токена по tg_id {tg_id}: {e}")
             return None
@@ -94,7 +94,7 @@ class GoogleTokensORM(GoogleTokensBase):
                 self.logger.warning(f"⚠️ Токен для пользователя {user_id} не найден")
                 return False
             
-            update_data = {"updated_at": datetime.utcnow()}
+            update_data = {"updated_at": datetime.now()}
             if access_token is not None:
                 update_data["access_token"] = access_token
             if refresh_token is not None:
@@ -138,11 +138,4 @@ class GoogleTokensORM(GoogleTokensBase):
             return False
 
     async def delete_all_tables(self) -> bool:
-        """Таблицы удаляются через Base.metadata.drop_all в UsersORM"""
-        try:
-            await self.session.execute(delete(GoogleToken))
-            self.logger.info("✅ Все токены удалены из таблицы")
-            return True
-        except Exception as e:
-            self.logger.error(f"❌ Ошибка при удалении токенов: {e}")
-            return False
+        ...
