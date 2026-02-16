@@ -1,10 +1,7 @@
 import os
-from pydantic_settings import BaseSettings, SettingsConfigDict
-from dotenv import load_dotenv, find_dotenv
+from .base_config import BaseConfig, BASE_DIR
 
-load_dotenv(find_dotenv())
-
-class DBConfig(BaseSettings):
+class DBConfig(BaseConfig):
     DB_HOST: str
     DB_PORT: int
     DB_USER: str
@@ -14,14 +11,8 @@ class DBConfig(BaseSettings):
     SQLITE_PATH: str
     DB_DEBUG: bool = False
 
-    BASE_DIR: str = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
     UPLOAD_DIR: str = os.path.join(BASE_DIR, 'app/uploads')
     STATIC_DIR: str = os.path.join(BASE_DIR, 'app/static')
-    
-    model_config = SettingsConfigDict(
-        env_file=os.path.join(BASE_DIR, ".env"),
-        env_file_encoding="utf-8",
-    )
     
     @property
     def url(self) -> str:

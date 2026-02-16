@@ -1,18 +1,8 @@
-import os
-from pydantic_settings import BaseSettings, SettingsConfigDict
-from dotenv import load_dotenv, find_dotenv
+from .base_config import BaseConfig
 
-load_dotenv(find_dotenv())
-
-class TelegramSettings(BaseSettings):
+class TelegramSettings(BaseConfig):
     BOT_TOKEN: str
     session_name: str = "tg_session"
-
-    BASE_DIR: str = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-    model_config = SettingsConfigDict(
-        env_file=os.path.join(BASE_DIR, ".env"),
-        env_file_encoding="utf-8",
-    )
 
     @property
     def send_message_url(self) -> str:

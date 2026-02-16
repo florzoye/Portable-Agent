@@ -28,7 +28,7 @@ class ConfigRegistry(metaclass=SingletonLockMeta):
         from data.configs.database_config import DBConfig
         from data.configs.tg_config import TelegramSettings
 
-        self._base_config = GoogleSettings()
+        self._google_config = GoogleSettings()
         logger.success('✓ GoogleSettings инициализирован')
 
         self._db_config = DBConfig()
@@ -54,13 +54,16 @@ class ConfigRegistry(metaclass=SingletonLockMeta):
             enable_utc=True,
             timezone='Europe/Moscow',
             broker_connection_retry_on_startup=True,
+            task_acks_late=True,
+            worker_prefetch_multiplier=1,
         )
 
         self._redis_client = Redis(
             host=settings.REDIS_HOST,
             port=settings.REDIS_PORT,
             db=0,
-            password=settings.REDIS_PASSWORD
+            password=settings.REDIS_PASSWORD,
+            decode_responses=True,  
         )
 
         logger.success('✓ REDIS_CLIENT и CELERY_APP инициализированы')
