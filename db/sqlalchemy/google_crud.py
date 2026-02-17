@@ -1,3 +1,4 @@
+import json
 import logging
 from typing import Optional
 from datetime import datetime
@@ -42,12 +43,13 @@ class GoogleTokensORM(GoogleTokensBase):
                     refresh_token=refresh_token,
                     token_expiry=token_expiry,
                     token_type=token_type,
-                    scopes=scopes
+                    scopes=json.dumps(scopes)
                 )
                 self.session.add(token)
                 await self.session.flush()
                 self.logger.info(f"✅ Токен для пользователя {user_id} успешно сохранен")
                 return True
+            
         except Exception as e:
             self.logger.error(f"❌ Ошибка при сохранении токена для пользователя {user_id}: {e}", exc_info=True)
             return False

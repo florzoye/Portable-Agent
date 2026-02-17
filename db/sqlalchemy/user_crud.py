@@ -34,6 +34,7 @@ class UsersORM(UsersBase):
             await self.session.refresh(user)
             self.logger.info(f"✅ Пользователь {tg_id} успешно добавлен")
             return UserModel.model_validate(user)
+        
         except Exception as e:
             self.logger.error(f"❌ Ошибка при добавлении пользователя {tg_id}: {e}", exc_info=True)
             return None
