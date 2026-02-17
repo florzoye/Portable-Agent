@@ -3,14 +3,15 @@ from contextlib import asynccontextmanager
 from fastapi.responses import RedirectResponse
 from fastapi import FastAPI, Request, HTTPException, Depends
 
-from src.factories.service import ServiceFactory
 from src.models.user_response import UserCreate, UserResponse
 from src.models.events import CreateEventRequest, EventsResponse
+from src.models.return_message import status, health_check_message
 from src.services.calendar.google_calendar import GoogleCalendarService
-from db.database_protocol import UsersBase, GoogleTokensBase
+from src.servers.dependencies import get_calendar_service, get_tokens_repo, get_users_repo
 
 from db.database import database
-from data.init_configs import init, get_config
+from data.init_configs import init
+from db.database_protocol import UsersBase, GoogleTokensBase
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -23,20 +24,6 @@ async def lifespan(app: FastAPI):
     print("✅ App stopped")
 
 app = FastAPI(title="Google Calendar API", lifespan=lifespan)
-
-async def get_calendar_service():
-    async with database.transaction() as session:
-        service = await ServiceFactory.create_google_calendar_service(session)
-        yield service
-
-async def get_users_repo():
-    async with database.transaction() as session:
-        yield ServiceFactory.create_users_repo(session)
-
-async def get_tokens_repo():
-    async with database.transaction() as session:
-        yield ServiceFactory.create_tokens_repo(session)
-
 
 @app.get("/auth_url")
 async def auth_url(
@@ -78,7 +65,7 @@ async def revoke_access(
     success = await calendar.revoke_access(tg_id)
     if not success:
         raise HTTPException(status_code=404, detail="User not found")
-    return {"status": "revoked"}
+    return await status('revoced')
 
 
 @app.get("/users/{tg_id}", response_model=UserResponse)
@@ -119,10 +106,13 @@ async def get_events(
     tg_id: int,
     calendar: GoogleCalendarService = Depends(get_calendar_service)
 ):
-    if not await calendar.load_credentials(tg_id):
-        raise HTTPException(status_code=401, detail="Not authorized")
+    try:
+        if not await calendar.load_credentials(tg_id):
+            raise HTTPException(status_code=401, detail="Not authorized")
 
-    events = await calendar.get_events(tg_id)
+        events = await calendar.get_events(tg_id)
+    except TimeoutError:
+        raise HTTPException(status_code=408, detail="User not found")
     return EventsResponse(events=events)
 
 
@@ -135,7 +125,7 @@ async def create_event(
     if not await calendar.load_credentials(tg_id):
         raise HTTPException(status_code=401, detail="Not authorized")
 
-    event = await calendar.create_event(
+    event = await calendar.create_event( # TODO
         tg_id=tg_id,
         title=data.title,
         start_time=data.start_time,
@@ -143,7 +133,7 @@ async def create_event(
         description=data.description,
         location=data.location,
     )
-    return {"status": "success", "event": event}
+    return await status('success').update({'event': event})
 
 
 @app.delete("/event/{event_id}")
@@ -155,25 +145,18 @@ async def delete_event(
     if not await calendar.load_credentials(tg_id):
         raise HTTPException(status_code=401, detail="Not authorized")
 
-    await calendar.delete_event(tg_id, event_id)
-    return {"status": "deleted"}
+    await calendar.delete_event(tg_id, event_id) # TODO
+    return await status('deleted')
 
 
 @app.get("/success")
 async def success_url():
-    return {"status": "Calendar подключен!"}
+    return await status('Calendar подключен!')
 
 
 @app.get("/health")
 async def health_check():
-    cfg = get_config()
-    return {
-        "status": "healthy",
-        "database": database.db_type,
-        "database_initialized": database.is_initialized,
-        "config_initialized": cfg.is_initialized
-    }
-
+    return health_check_message(database)
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
