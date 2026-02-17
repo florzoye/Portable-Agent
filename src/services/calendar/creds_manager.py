@@ -10,7 +10,7 @@ from googleapiclient.discovery import build
 from src.services.calendar.token_service import TokenService
 
 from utils.const import SCOPES
-from utils.helpers import DataCreator
+from utils.helpers import DataCreator, DateTimeNormalizer
 
 class CredentialsManager:
     def __init__(self, client_id: str, client_secret: str, token_service: TokenService):
@@ -20,7 +20,7 @@ class CredentialsManager:
         self.executor = ThreadPoolExecutor(max_workers=3)
     
     def _prepare_credentials_dict(self, token_data: Any) -> dict:
-        expiry = self.token_service.normalize_expiry_from_db(token_data.token_expiry)
+        expiry = DateTimeNormalizer.normalize_expiry_from_db(token_data.token_expiry)
         
         credentials_dict = DataCreator.credentials_dict(
             token_data,
