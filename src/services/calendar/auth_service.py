@@ -1,14 +1,21 @@
 import logging
 from google_auth_oauthlib.flow import Flow
-from utils.const import SCOPES, REDIRECT_URI
 
 from db.database_protocol import UsersBase
 from src.services.calendar.token_service import TokenService
 from src.services.calendar.creds_manager import CredentialsManager
 
+from utils.helpers import DataCreator
+from utils.const import SCOPES, REDIRECT_URI
+
 class GoogleAuthService:
-    def __init__(self, users_repo: UsersBase, token_service: TokenService,
-                 credentials_manager: CredentialsManager, client_id: str, client_secret: str):
+    def __init__(
+            self, 
+            users_repo: UsersBase, 
+            token_service: TokenService,
+            credentials_manager: CredentialsManager, 
+            client_id: str, client_secret: str
+        ):
         self.users_repo = users_repo
         self.token_service = token_service
         self.credentials_manager = credentials_manager
@@ -18,15 +25,10 @@ class GoogleAuthService:
 
     def _get_flow(self) -> Flow:
         return Flow.from_client_config(
-            {
-                "web": {
-                    "client_id": self.client_id,
-                    "client_secret": self.client_secret,
-                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                    "token_uri": "https://oauth2.googleapis.com/token",
-                    "redirect_uris": [REDIRECT_URI]
-                }
-            },
+            DataCreator.get_flow_web_config(
+                self.client_id, 
+                self.client_secret
+            ),
             scopes=SCOPES,
             redirect_uri=REDIRECT_URI
         )

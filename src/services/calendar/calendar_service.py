@@ -6,7 +6,7 @@ from src.models.events import EventModel
 from src.enum.timeframe import TimeFrame
 from src.services.calendar.creds_manager import CredentialsManager
 from db.database_protocol import UsersBase, GoogleTokensBase
-from utils.preprocessing_func import preprocess_event_data
+from utils.helpers import preprocess_event_data
 
 class CalendarService:
     def __init__(

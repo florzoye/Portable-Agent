@@ -1,7 +1,7 @@
 from db.database_protocol import UsersBase, GoogleTokensBase
 from src.services.calendar.token_service import TokenService
-from src.services.calendar.creds_manager import CredentialsManager
 from src.services.calendar.auth_service import GoogleAuthService
+from src.services.calendar.creds_manager import CredentialsManager
 from src.services.calendar.calendar_service import CalendarService
 
 class GoogleCalendarService:
