@@ -64,6 +64,7 @@ class UsersBase(ABC):
     async def update_user(
         self,
         tg_id: int,
+        *,
         tg_nick: Optional[str] = None,
         email: Optional[str] = None,
         google_id: Optional[str] = None
@@ -135,6 +136,7 @@ class GoogleTokensBase(ABC):
     async def update_token(
         self,
         user_id: int,
+        *,
         access_token: Optional[str] = None,
         refresh_token: Optional[str] = None,
         token_expiry: Optional[datetime] = None

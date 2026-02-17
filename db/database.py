@@ -62,13 +62,11 @@ class Database:
     @asynccontextmanager
     async def transaction(self):
         session = self.get_session()
-        
         try:
-            yield session
-            
+            yield session  
             if isinstance(session, AsyncSession):
                 await session.commit()
-                
+         
         except Exception as e:
             if isinstance(session, AsyncSession):
                 await session.rollback()
@@ -132,10 +130,8 @@ class Database:
             self.logger.info("✅ Database schema fully reset")
         else:
             async with self.transaction() as session:
-                users_repo = self.get_users_repo(session)
                 tokens_repo = self.get_tokens_repo(session)
 
-                await users_repo.delete_all_tables()
                 await tokens_repo.delete_all_tables()
             self.logger.info("✅ Database schema fully reset")
 
