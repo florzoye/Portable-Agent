@@ -1,6 +1,6 @@
 from loguru import logger
 from threading import Lock
-
+from src.enum.db import DatabaseType
 from utils.metaclasses import SingletonLockMeta   
 from src.exceptions.config_exp import ConfigNotInitializedError
 
@@ -34,6 +34,9 @@ class ConfigRegistry(metaclass=SingletonLockMeta):
         self._db_config = DBConfig()
         logger.success('✓ DBConfig инициализирован')
 
+        if self._db_config.DB_TYPE not in [DatabaseType.SQLITE.value, DatabaseType.POSTGRESQL.value]:
+            raise ConfigNotInitializedError(f'Неизвестный тип базы данных: {self._db_config.DB_TYPE}')
+        
         self._tg_settings = TelegramSettings()
         logger.success('✓ TelegramSettings инициализирован')
 
