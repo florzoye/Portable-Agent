@@ -2,6 +2,7 @@ __pycache__/
 *.py[cod]
 *$py.class
 test_*.py
+test.py
 credentials.json
 token.json
 charts/
