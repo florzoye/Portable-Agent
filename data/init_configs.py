@@ -2,7 +2,7 @@ from loguru import logger
 from threading import Lock
 from src.enum.db import DatabaseType
 from utils.metaclasses import SingletonLockMeta   
-from src.exceptions.config_exp import ConfigNotInitializedError
+from src.exceptions import ConfigNotInitializedError
 
 class ConfigRegistry(metaclass=SingletonLockMeta):
     _initialized = False
