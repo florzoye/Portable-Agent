@@ -10,7 +10,7 @@ from db.sqlite.manager import AsyncDatabaseManager
 from db.database_protocol import UsersBase, GoogleTokensBase
 
 from src.enum.db import DatabaseType
-from src.factories.repository_factory import repository_factory
+from src.factories import repository_factory
 
 class Database:
     def __init__(self):
