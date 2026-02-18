@@ -3,14 +3,12 @@ from contextlib import asynccontextmanager
 from fastapi.responses import RedirectResponse
 from fastapi import FastAPI, Request, HTTPException, Depends
 
-from src.models.user_response import UserCreate, UserResponse
-from src.models.events import CreateEventRequest, EventsResponse
-from src.models.return_message import status, health_check_message
 from src.services.calendar.google_calendar import GoogleCalendarService
 from src.servers.dependencies import get_calendar_service, get_tokens_repo, get_users_repo
+from src.models import UserCreate, UserResponse, CreateEventRequest, EventsResponse, status, health_check_message
 
+from data import init
 from db.database import database
-from data.init_configs import init
 from db.database_protocol import UsersBase, GoogleTokensBase
 
 @asynccontextmanager

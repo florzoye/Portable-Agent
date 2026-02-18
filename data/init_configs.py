@@ -1,6 +1,6 @@
 from loguru import logger
 from threading import Lock
-from src.enum.db import DatabaseType
+from src.enum import DatabaseType
 from utils.metaclasses import SingletonLockMeta   
 from src.exceptions import ConfigNotInitializedError
 

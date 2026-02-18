@@ -1,6 +1,7 @@
 from typing import Any, Optional
 from datetime import timezone, datetime
-from src.models.events import EventModel
+
+from src.models import EventModel
 from utils.const import REDIRECT_URI
 
 def preprocess_event_data(raw_events: list[dict[str, Any]]) -> list[EventModel]:

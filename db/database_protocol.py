@@ -1,13 +1,10 @@
 from datetime import datetime
+from typing import Optional, List
 from abc import ABC, abstractmethod
-from typing import Optional, Any, List
 
-from src.models.user_model import UserModel
-from src.models.token_model import TokenModel
+from src.models import UserModel, TokenModel
 
 class UsersBase(ABC):
-    """Базовый интерфейс для работы с пользователями"""
-
     @abstractmethod
     async def create_tables(self) -> bool:
         """Создать таблицу пользователей"""

@@ -5,7 +5,7 @@ from datetime import datetime
 from sqlalchemy import select, update, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.models.token_model import TokenModel
+from src.models import TokenModel
 from db.database_protocol import GoogleTokensBase
 from db.sqlalchemy.models import GoogleToken, Users
 

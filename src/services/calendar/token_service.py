@@ -1,8 +1,8 @@
 from datetime import datetime
 from typing import Any, Optional
 
+from src.models import TokenModel
 from utils.helpers import DateTimeNormalizer
-from src.models.token_model import TokenModel
 from db.database_protocol import GoogleTokensBase
 
 class TokenService:

@@ -9,7 +9,7 @@ from db.sqlalchemy.models import Base
 from db.sqlite.manager import AsyncDatabaseManager
 from db.database_protocol import UsersBase, GoogleTokensBase
 
-from src.enum.db import DatabaseType
+from src.enum import DatabaseType
 from src.factories import repository_factory
 
 class Database:

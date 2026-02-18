@@ -1,4 +1,4 @@
-from data.init_configs import get_config
+from data import get_config
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 
 DB_CONFIG = get_config().DB_CONFIG

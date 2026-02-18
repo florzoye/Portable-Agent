@@ -3,9 +3,9 @@ from typing import Optional, List
 from sqlalchemy import select, update, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.models import UserModel
+from db.sqlalchemy.models import  Users
 from db.database_protocol import UsersBase
-from db.sqlalchemy.models import Base, Users
-from src.models.user_model import UserModel
 
 class UsersORM(UsersBase):
     def __init__(self, session: AsyncSession):

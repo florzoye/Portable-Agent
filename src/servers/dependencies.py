@@ -1,5 +1,5 @@
 from db.database import database
-from src.factories.service import ServiceFactory
+from src.factories import ServiceFactory
 from src.exceptions import CalendarServiceException, UserRepositoryException, TokenRepositoryException
 
 async def get_calendar_service():

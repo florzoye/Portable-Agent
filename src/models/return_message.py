@@ -1,4 +1,4 @@
-from data.init_configs import get_config
+from data import get_config
 
 async def status(message: str) -> dict[str]:
     return {'status': message}

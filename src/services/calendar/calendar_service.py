@@ -2,11 +2,12 @@ import logging
 from typing import Optional, Union
 from datetime import datetime, timedelta, timezone
 
-from src.models.events import EventModel
-from src.enum.timeframe import TimeFrame
+from src.enum import TimeFrame
+from src.models import EventModel
 from src.services.calendar.creds_manager import CredentialsManager
-from db.database_protocol import UsersBase, GoogleTokensBase
+
 from utils.helpers import preprocess_event_data
+from db.database_protocol import UsersBase, GoogleTokensBase
 
 class CalendarService:
     def __init__(

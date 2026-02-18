@@ -1,5 +1,5 @@
-from data.init_configs import get_config
-from src.enum.db import DatabaseType
+from data import get_config
+from src.enum import DatabaseType
 from src.services.calendar.google_calendar import GoogleCalendarService
 from db.database_protocol import UsersBase, GoogleTokensBase
 
