@@ -6,7 +6,7 @@ from src.services.calendar.token_service import TokenService
 from src.services.calendar.creds_manager import CredentialsManager
 
 from utils.helpers import DataCreator
-from utils.const import SCOPES, REDIRECT_URI
+from utils.const import SCOPES, GOOGLE_CALENDAR_REDIRECT_URI
 
 class GoogleAuthService:
     def __init__(
@@ -30,7 +30,7 @@ class GoogleAuthService:
                 self.client_secret
             ),
             scopes=SCOPES,
-            redirect_uri=REDIRECT_URI
+            redirect_uri=GOOGLE_CALENDAR_REDIRECT_URI
         )
 
     async def get_auth_url(self, tg_id: int) -> str:
