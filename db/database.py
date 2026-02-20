@@ -114,7 +114,7 @@ class Database:
             async with engine.begin() as conn:
                 await conn.run_sync(Base.metadata.create_all)
 
-        self.logger.info("✅ All tables created")
+        self.logger.info("✅ Все таблицы созданы")
     
     async def drop_tables(self):
         if not self._initialized:
@@ -127,13 +127,13 @@ class Database:
                 await conn.execute(text("DROP SCHEMA public CASCADE"))
                 await conn.execute(text("CREATE SCHEMA public"))
 
-            self.logger.info("✅ Database schema fully reset")
+            self.logger.info("✅ Все таблицы удалены (PostgreSQL)")
         else:
             async with self.transaction() as session:
                 tokens_repo = self.get_tokens_repo(session)
 
                 await tokens_repo.delete_all_tables()
-            self.logger.info("✅ Database schema fully reset")
+            self.logger.info("✅ Все таблицы удалены (Sqlite)")
 
     async def close(self):
         if self.sqlite_manager:
@@ -149,6 +149,6 @@ class Database:
         return self._initialized
 
 
-database = Database()
+global_db_manager = Database()
 
 

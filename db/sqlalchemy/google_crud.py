@@ -28,10 +28,10 @@ class GoogleTokensORM(GoogleTokensBase):
     ) -> bool:
         try:
             existing_token = await self.get_token(user_id)
-            
+
             if existing_token:
-                return await self.update_token(
-                    user_id=user_id,
+                return await self._update_token_by_id(
+                    token_id=existing_token.id,
                     access_token=access_token,
                     refresh_token=refresh_token,
                     token_expiry=token_expiry
@@ -43,13 +43,13 @@ class GoogleTokensORM(GoogleTokensBase):
                     refresh_token=refresh_token,
                     token_expiry=token_expiry,
                     token_type=token_type,
-                    scopes=json.dumps(scopes)
+                    scopes=json.dumps(scopes) if scopes is not None else None
                 )
                 self.session.add(token)
                 await self.session.flush()
                 self.logger.info(f"✅ Токен для пользователя {user_id} успешно сохранен")
                 return True
-            
+
         except Exception as e:
             self.logger.error(f"❌ Ошибка при сохранении токена для пользователя {user_id}: {e}", exc_info=True)
             return False
@@ -72,7 +72,7 @@ class GoogleTokensORM(GoogleTokensBase):
         try:
             result = await self.session.execute(
                 select(GoogleToken)
-                .join(Users)
+                .join(Users, GoogleToken.user_id == Users.id)  
                 .where(Users.tg_id == tg_id)
                 .order_by(GoogleToken.created_at.desc())
                 .limit(1)
@@ -95,25 +95,36 @@ class GoogleTokensORM(GoogleTokensBase):
             if not token:
                 self.logger.warning(f"⚠️ Токен для пользователя {user_id} не найден")
                 return False
-            
-            update_data = {"updated_at": datetime.now()}
+            return await self._update_token_by_id(token.id, access_token, refresh_token, token_expiry)
+        except Exception as e:
+            self.logger.error(f"❌ Ошибка при обновлении токена для пользователя {user_id}: {e}", exc_info=True)
+            return False
+
+    async def _update_token_by_id(
+        self,
+        token_id: int,
+        access_token: Optional[str] = None,
+        refresh_token: Optional[str] = None,
+        token_expiry: Optional[datetime] = None
+    ) -> bool:
+        try:
+            update_data: dict = {"updated_at": datetime.now()}
             if access_token is not None:
                 update_data["access_token"] = access_token
             if refresh_token is not None:
                 update_data["refresh_token"] = refresh_token
             if token_expiry is not None:
                 update_data["token_expiry"] = token_expiry
-            
+
             await self.session.execute(
                 update(GoogleToken)
-                .where(GoogleToken.id == token.id)
+                .where(GoogleToken.id == token_id)
                 .values(**update_data)
             )
-            
-            self.logger.info(f"✅ Токен для пользователя {user_id} успешно обновлен")
+            self.logger.info(f"✅ Токен id={token_id} успешно обновлен")
             return True
         except Exception as e:
-            self.logger.error(f"❌ Ошибка при обновлении токена для пользователя {user_id}: {e}", exc_info=True)
+            self.logger.error(f"❌ Ошибка при обновлении токена id={token_id}: {e}", exc_info=True)
             return False
 
     async def delete_token(self, user_id: int) -> bool:

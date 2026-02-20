@@ -1,7 +1,3 @@
-# db/sqlite/schemas.py
-
-# ==================== USERS TABLE ====================
-
 def create_users_table_sql() -> str:
     """Создание таблицы пользователей"""
     return """
@@ -83,7 +79,7 @@ def create_tokens_table_sql() -> str:
         access_token TEXT NOT NULL,
         refresh_token TEXT,
         token_type TEXT DEFAULT 'Bearer',
-        expires_at TEXT,
+        token_expiry  TEXT,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -94,8 +90,8 @@ def create_tokens_table_sql() -> str:
 def insert_token_sql() -> str:
     """Добавление нового токена"""
     return """
-    INSERT INTO tokens (user_id, access_token, refresh_token, token_type, expires_at)
-    VALUES (:user_id, :access_token, :refresh_token, :token_type, :expires_at)
+    INSERT INTO tokens (user_id, access_token, refresh_token, token_type, token_expiry )
+    VALUES (:user_id, :access_token, :refresh_token, :token_type, :token_expiry )
     """
 
 
@@ -106,7 +102,7 @@ def update_token_sql() -> str:
     SET access_token = :access_token,
         refresh_token = :refresh_token,
         token_type = :token_type,
-        expires_at = :expires_at,
+        token_expiry  = :token_expiry ,
         updated_at = CURRENT_TIMESTAMP
     WHERE user_id = :user_id
     """
@@ -141,14 +137,16 @@ def token_exists_sql() -> str:
 
 # ==================== HELPER QUERIES ====================
 
-def create_indexes_sql() -> list:
-    """Создание индексов для оптимизации"""
+def create_users_indexes_sql() -> list[str]:
     return [
         "CREATE INDEX IF NOT EXISTS idx_users_tg_id ON users(tg_id)",
         "CREATE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id)",
-        "CREATE INDEX IF NOT EXISTS idx_tokens_user_id ON tokens(user_id)",
     ]
 
+def create_tokens_indexes_sql() -> list[str]:
+    return [
+        "CREATE INDEX IF NOT EXISTS idx_tokens_user_id ON tokens(user_id)",
+    ]
 
 def drop_all_tables_sql() -> list:
     """Удаление всех таблиц"""
