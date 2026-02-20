@@ -1,13 +1,22 @@
+from datetime import datetime
 from fastapi import APIRouter, Request, HTTPException, Depends
 from fastapi.responses import RedirectResponse
 
 from src.services.calendar.google_calendar import GoogleCalendarService
-from src.models import UserCreate, UserResponse, CreateEventRequest, EventsResponse, status
+from src.models import (
+    UserCreate, UserResponse,
+    CreateEventRequest, UpdateEventRequest,
+    SearchEventsRequest, EventsRangeRequest,
+    EventsResponse, EventResponse,
+    status
+)
 from src.servers.calendar.dependencies import get_calendar_service, get_tokens_repo, get_users_repo
-
 from db.database_protocol import UsersBase, GoogleTokensBase
 
 router = APIRouter(prefix="/calendar", tags=["calendar"])
+
+
+# --- Auth ---
 
 @router.get("/auth_url")
 async def auth_url(
@@ -49,8 +58,15 @@ async def revoke_access(
     success = await calendar.revoke_access(tg_id)
     if not success:
         raise HTTPException(status_code=404, detail="User not found")
-    return await status('revoked')
+    return await status("revoked")
 
+
+@router.get("/success")
+async def success_url():
+    return await status("Calendar подключен!")
+
+
+# --- Users ---
 
 @router.get("/users/{tg_id}", response_model=UserResponse)
 async def get_user(
@@ -85,42 +101,108 @@ async def create_user(
     return UserResponse.model_validate({**user.model_dump(), "has_google_token": has_token})
 
 
+# --- Events ---
+
 @router.get("/events", response_model=EventsResponse, response_model_exclude_none=True)
 async def get_events(
     tg_id: int,
+    days_ahead: int = 7,
     calendar: GoogleCalendarService = Depends(get_calendar_service)
 ):
     try:
         if not await calendar.load_credentials(tg_id):
             raise HTTPException(status_code=401, detail="Not authorized")
-
-        events = await calendar.get_events(tg_id)
+        events = await calendar.get_events(tg_id, days_ahead=days_ahead)
     except TimeoutError:
         raise HTTPException(status_code=408, detail="Request timeout")
     return EventsResponse(events=events)
 
 
-@router.post("/create_event")
+@router.get("/events/search", response_model=EventsResponse)
+async def search_events(
+    tg_id: int,
+    query: str,
+    days_ahead: int = 30,
+    calendar: GoogleCalendarService = Depends(get_calendar_service)
+):
+    if not await calendar.load_credentials(tg_id):
+        raise HTTPException(status_code=401, detail="Not authorized")
+
+    events = await calendar.search_events(tg_id, query=query, days_ahead=days_ahead)
+    return EventsResponse(events=events)
+
+
+@router.post("/events/range", response_model=EventsResponse)
+async def get_events_range(
+    data: EventsRangeRequest,
+    calendar: GoogleCalendarService = Depends(get_calendar_service)
+):
+    if not await calendar.load_credentials(data.user_id):
+        raise HTTPException(status_code=401, detail="Not authorized")
+
+    events = await calendar.get_events_range(data.user_id, start=data.start, end=data.end)
+    return EventsResponse(events=events)
+
+
+@router.get("/events/{event_id}")
+async def get_event(
+    event_id: str,
+    tg_id: int,
+    calendar: GoogleCalendarService = Depends(get_calendar_service)
+):
+    if not await calendar.load_credentials(tg_id):
+        raise HTTPException(status_code=401, detail="Not authorized")
+
+    event = await calendar.get_event_by_id(tg_id, event_id)
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+    return EventResponse(event=event)
+
+
+@router.post("/events")
 async def create_event(
     data: CreateEventRequest,
     calendar: GoogleCalendarService = Depends(get_calendar_service)
 ):
-    tg_id = int(data.user_id)
-    if not await calendar.load_credentials(tg_id):
+    if not await calendar.load_credentials(data.user_id):
         raise HTTPException(status_code=401, detail="Not authorized")
 
     event = await calendar.create_event(
-        tg_id=tg_id,
+        tg_id=data.user_id,
         title=data.title,
         start_time=data.start_time,
         end_time=data.end_time,
         description=data.description,
         location=data.location,
+        attendees=data.attendees,
+        timezone=data.timezone,
     )
-    return await status('success')  # TODO: добавить event в ответ когда будет готов метод
+    return EventResponse(event=event)
 
 
-@router.delete("/event/{event_id}")
+@router.patch("/events/{event_id}")
+async def update_event(
+    event_id: str,
+    data: UpdateEventRequest,
+    calendar: GoogleCalendarService = Depends(get_calendar_service)
+):
+    if not await calendar.load_credentials(data.user_id):
+        raise HTTPException(status_code=401, detail="Not authorized")
+
+    event = await calendar.update_event(
+        tg_id=data.user_id,
+        event_id=event_id,
+        title=data.title,
+        start_time=data.start_time,
+        end_time=data.end_time,
+        description=data.description,
+        location=data.location,
+        timezone=data.timezone,
+    )
+    return EventResponse(event=event)
+
+
+@router.delete("/events/{event_id}")
 async def delete_event(
     event_id: str,
     tg_id: int,
@@ -129,10 +211,5 @@ async def delete_event(
     if not await calendar.load_credentials(tg_id):
         raise HTTPException(status_code=401, detail="Not authorized")
 
-    await calendar.delete_event(tg_id, event_id)  # TODO
-    return await status('deleted')
-
-
-@router.get("/success")
-async def success_url():
-    return await status('Calendar подключен!')
+    await calendar.delete_event(tg_id, event_id)
+    return await status("deleted")

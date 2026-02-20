@@ -5,6 +5,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from data import init
 from db.database import global_db_manager
 
+from utils.setup_logger import setup_logging
+
 def create_app(
     title: str,
     routers: list,
@@ -13,7 +15,9 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
+        setup_logging()
         init()
+        
         await global_db_manager.setup()
         await global_db_manager.create_tables()
         yield
