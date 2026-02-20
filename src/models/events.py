@@ -1,6 +1,6 @@
 from typing import Optional
 from datetime import datetime, date
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 class CreateEventRequest(BaseModel):
     user_id: str = Field(..., example="123")
@@ -34,3 +34,42 @@ class EventModel(BaseModel):
 
 class EventsResponse(BaseModel):
     events: list[EventModel]
+
+class UpdateEventRequest(BaseModel):
+    user_id: int
+    title: Optional[str] = None
+    start_time: Optional[datetime] = None
+    end_time: Optional[datetime] = None
+    description: Optional[str] = None
+    location: Optional[str] = None
+    attendees: Optional[list[str]] = None
+    timezone: str = "UTC"
+
+    @field_validator("end_time")
+    @classmethod
+    def end_after_start(cls, end_time, info):
+        if end_time and "start_time" in info.data and info.data["start_time"]:
+            if end_time <= info.data["start_time"]:
+                raise ValueError("end_time must be after start_time")
+        return end_time
+    
+class EventResponse(BaseModel):
+    event: dict
+
+class SearchEventsRequest(BaseModel):
+    user_id: int
+    query: str
+    days_ahead: int = 30
+
+
+class EventsRangeRequest(BaseModel):
+    user_id: int
+    start: datetime
+    end: datetime
+
+    @field_validator("end")
+    @classmethod
+    def end_after_start(cls, end, info):
+        if "start" in info.data and end <= info.data["start"]:
+            raise ValueError("end must be after start")
+        return end
