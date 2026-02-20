@@ -2,7 +2,7 @@ from typing import Any, Optional
 from datetime import timezone, datetime
 
 from src.models import EventModel
-from utils.const import REDIRECT_URI
+from utils.const import GOOGLE_CALENDAR_REDIRECT_URI
 
 def preprocess_event_data(raw_events: list[dict[str, Any]]) -> list[EventModel]:
     return [EventModel.model_validate(event) for event in raw_events]
@@ -19,7 +19,7 @@ class DataCreator:
                     "client_secret": client_secret,
                     "auth_uri": "https://accounts.google.com/o/oauth2/auth",
                     "token_uri": "https://oauth2.googleapis.com/token",
-                    "redirect_uris": [REDIRECT_URI]
+                    "redirect_uris": [GOOGLE_CALENDAR_REDIRECT_URI]
             }
         }
 

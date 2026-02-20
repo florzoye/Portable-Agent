@@ -1,2 +1,2 @@
 SCOPES = ['https://www.googleapis.com/auth/calendar']
-REDIRECT_URI = "http://localhost:8000/oauth/callback"
+GOOGLE_CALENDAR_REDIRECT_URI = 'http://localhost:8001/calendar/oauth/callback'
