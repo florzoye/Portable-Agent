@@ -7,6 +7,21 @@ from utils.const import GOOGLE_CALENDAR_REDIRECT_URI
 def preprocess_event_data(raw_events: list[dict[str, Any]]) -> list[EventModel]:
     return [EventModel.model_validate(event) for event in raw_events]
 
+def format_event(e: dict) -> str:
+    start = e.get("start") or {}
+    end = e.get("end") or {}
+    start_time = start.get("dateTime") or start.get("date", "—")
+    end_time = end.get("dateTime") or end.get("date", "—")
+
+    return (
+        f"\n🔹 {e.get('summary', '—')}"
+        f"\n   ID: {e.get('id')}"
+        f"\n   Начало: {start_time}"
+        f"\n   Конец: {end_time}"
+        + (f"\n   Место: {e.get('location')}" if e.get('location') else "")
+        + (f"\n   Описание: {e.get('description')}" if e.get('description') else "")
+    )
+
 class DataCreator:
     @staticmethod
     def get_flow_web_config(
