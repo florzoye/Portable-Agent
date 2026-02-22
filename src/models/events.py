@@ -3,7 +3,7 @@ from datetime import datetime, date
 from pydantic import BaseModel, Field, field_validator
 
 class CreateEventRequest(BaseModel):
-    user_id: str = Field(..., example="123")
+    user_id: str | int  = Field(..., example="123")
     title: str = Field(..., min_length=1, example="Встреча")
     start_time: datetime = Field(..., example="2026-02-20T10:00:00+00:00")
     end_time: datetime = Field(..., example="2026-02-20T11:00:00+00:00")
