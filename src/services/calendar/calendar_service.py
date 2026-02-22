@@ -178,23 +178,20 @@ class CalendarService:
         self.logger.info(f"Search '{query}' for tg_id={tg_id}: {len(result.get('items', []))} results")
         return preprocess_event_data(result.get("items", []))
 
-    async def get_events_range(
-        self,
-        tg_id: int,
-        start: datetime,
-        end: datetime,
-    ) -> list[EventModel]:
+    async def get_events_range(self, tg_id: int, start: datetime, end: datetime) -> list[EventModel]:
         user = await self._get_user(tg_id)
         service = await self.credentials_manager.get_service(user.id)
+
+        time_min = start.isoformat() + "Z" if start.tzinfo is None else start.isoformat()
+        time_max = end.isoformat() + "Z" if end.tzinfo is None else end.isoformat()
 
         result = await self.credentials_manager._run_sync(
             service.events().list(
                 calendarId="primary",
-                timeMin=start.isoformat(),
-                timeMax=end.isoformat(),
+                timeMin=time_min,
+                timeMax=time_max,
                 singleEvents=True,
                 orderBy="startTime"
             ).execute
         )
-        self.logger.info(f"Fetched events range {start.date()}—{end.date()} for tg_id={tg_id}")
         return preprocess_event_data(result.get("items", []))
