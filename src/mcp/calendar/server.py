@@ -6,7 +6,11 @@ from src.mcp.calendar.models import (
     EventsRangeParams
 )
 
-mcp = FastMCP(name="Google Calendar", port=8002)
+from data import get_config
+ports_config = get_config().PORTS_CONFIG
+
+mcp = FastMCP(name="Google Calendar", port=ports_config.MCP_CALENDAR_PORT)
+
 @mcp.resource(
         'calendar://events/{tg_id}',
         description="Получить предстоящие события пользователя из Google Calendar"
@@ -24,7 +28,7 @@ async def get_upcoming_events(tg_id: str) -> str:
 
     lines = []
     for e in events:
-        lines.append(f"- [{e.get('id')}] {e.get('title')} | {e.get('start_time')} → {e.get('end_time')}")
+        lines.append(format_event(e))
     return "\n".join(lines)
 
 
@@ -334,7 +338,7 @@ async def get_auth_url(tg_id: int) -> str:
     if status != 200:
         return f"❌ Не удалось получить ссылку: {status}"
 
-    return f" Ссылка для авторизации:\n{data.get('auth_url')}"
+    return f"Ссылка для авторизации:\n{data.get('auth_url')}"
 
 
 @mcp.tool(description="Проверить, авторизован ли пользователь в Google Calendar")
