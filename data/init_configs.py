@@ -32,7 +32,6 @@ class ConfigRegistry(metaclass=SingletonLockMeta):
         from data.configs.tg_config import TelegramSettings
         from data.configs.llm_config import BaseLLMConfig
         from data.configs.ollama_config import OllamaConfig
-        from data.configs.ports_config import PortsConfig
 
         self._google_config = GoogleSettings()
         logger.success('✓ GoogleSettings инициализирован')
@@ -51,9 +50,6 @@ class ConfigRegistry(metaclass=SingletonLockMeta):
 
         self._ollama_config = OllamaConfig()
         logger.success('✓ OllamaConfig инициализирован')
-
-        self._ports_config = PortsConfig()
-        logger.success('✓ PortsConfig инициализирован')
 
     def _init_brokers(self):
         """Инициализация брокеров или очередей"""
