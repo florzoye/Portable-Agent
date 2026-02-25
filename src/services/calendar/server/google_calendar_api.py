@@ -8,7 +8,7 @@ from src.models import (
     EventsRangeRequest, EventsResponse, 
     EventResponse, status
 )
-from src.servers.calendar.dependencies import get_calendar_service, get_tokens_repo, get_users_repo
+from src.services.calendar.server.dependencies import get_calendar_service, get_tokens_repo, get_users_repo
 from db.database_protocol import UsersBase, GoogleTokensBase
 
 router = APIRouter(prefix="/calendar", tags=["calendar"])

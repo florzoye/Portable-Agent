@@ -1,7 +1,7 @@
 from mcp.server.fastmcp import FastMCP
 from utils.client_session import AsyncHTTPClient
 from utils.helpers import format_event
-from src.mcp.calendar.models import (
+from src.services.calendar.mcp.models import (
     CreateEventParams, UpdateEventParams,
     EventsRangeParams
 )
