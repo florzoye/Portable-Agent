@@ -5,11 +5,9 @@ from src.mcp.calendar.models import (
     CreateEventParams, UpdateEventParams,
     EventsRangeParams
 )
+from utils.const import MCP_CALENDAR_PORT
 
-from data import get_config
-ports_config = get_config().PORTS_CONFIG
-
-mcp = FastMCP(name="Google Calendar", port=ports_config.MCP_CALENDAR_PORT)
+mcp = FastMCP(name="Google Calendar", port=MCP_CALENDAR_PORT)
 
 @mcp.resource(
         'calendar://events/{tg_id}',
