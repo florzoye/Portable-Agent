@@ -1,10 +1,17 @@
+import os
+
 SCOPES = ['https://www.googleapis.com/auth/calendar']
 
-FASTAPI_CALENDAR_PORT = 8001
-MCP_CALENDAR_PORT = 8002
+FASTAPI_CALENDAR_PORT = int(os.getenv("FASTAPI_CALENDAR_PORT", "8001"))
+MCP_CALENDAR_PORT = int(os.getenv("MCP_CALENDAR_PORT", "8002"))
 
-GOOGLE_CALENDAR_REDIRECT_URI = f'http://localhost:{FASTAPI_CALENDAR_PORT}/calendar/oauth/callback'
+_FASTAPI_HOST = os.getenv("FASTAPI_CALENDAR_HOST", "localhost")
+_MCP_HOST = os.getenv("MCP_CALENDAR_HOST", "localhost")
 
-GOOGLE_CALENDAR_URI = f'http://localhost:{FASTAPI_CALENDAR_PORT}'
+GOOGLE_CALENDAR_REDIRECT_URI = os.getenv(
+    "GOOGLE_CALENDAR_REDIRECT_URI",
+    f"http://localhost:{FASTAPI_CALENDAR_PORT}/calendar/oauth/callback"
+)
 
-MCP_CALENDAR_URL = f'http://localhost:{MCP_CALENDAR_PORT}/sse'
+GOOGLE_CALENDAR_URI = f"http://{_FASTAPI_HOST}:{FASTAPI_CALENDAR_PORT}"
+MCP_CALENDAR_URL = f"http://{_MCP_HOST}:{MCP_CALENDAR_PORT}/sse"
