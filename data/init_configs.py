@@ -84,7 +84,27 @@ class ConfigRegistry(metaclass=SingletonLockMeta):
 
     def _init_services(self):
         """Инициализация сервисов с зависимостями"""
-        ...
+        from data.configs.callbacks_config import GlobalCallbacksService
+        
+        self._callback_service = GlobalCallbacksService()
+        self._callback_service.initialize()
+        
+        if self._callback_service.langsmith_config.LANGCHAIN_TRACING_V2:
+            logger.success(
+                f'✓ LangSmith ENABLED | project={self._callback_service.langsmith_config.LANGCHAIN_PROJECT}'
+            )
+        else:
+            logger.info('✓ LangSmith tracing DISABLED')
+            
+        if self._callback_service.langfuse_config.USE_LANGFUSE:
+            if self._callback_service.langfuse_handler:
+                logger.success('✓ Langfuse initialized')
+            else:
+                logger.warning('⚠ Langfuse init failed')
+        else:
+            logger.info('✓ Langfuse disabled')
+        
+        logger.success('✓ CALLBACK_SERVICE инициализирован')
 
     def initialize(self):
         """Полная инициализация всех конфигов"""
@@ -140,6 +160,11 @@ class ConfigRegistry(metaclass=SingletonLockMeta):
         self._check_initialized()
         return self._ports_config
 
+    @property
+    def CALLBACK_SERVICE(self):
+        self._check_initialized()
+        return self._callback_service
+    
     @property
     def is_initialized(self) -> bool:
         return self._initialized
