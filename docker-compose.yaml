@@ -6,6 +6,7 @@ networks:
 
 volumes:
   sqlite-data:
+  agent-storage:  
 
 services:
 
@@ -23,8 +24,7 @@ services:
 
   fastapi-calendar:
     build: .
-    command: >
-      uv run python -m src.services.calendar.server.main
+    command: uv run python -m src.services.calendar.server.run
     ports:
       - "8001:8001"
     env_file: .env
@@ -33,7 +33,6 @@ services:
       FASTAPI_CALENDAR_HOST: fastapi-calendar
       GOOGLE_CALENDAR_REDIRECT_URI: "http://localhost:8001/calendar/oauth/callback"
     volumes:
-      # SQLite файл живёт в volume, не теряется при пересборке
       - sqlite-data:/app/data/db
     networks:
       - app-net
@@ -50,8 +49,7 @@ services:
 
   mcp-calendar:
     build: .
-    command: >
-      uv run python -m src.services.calendar.mcp.main
+    command: uv run python -m src.services.calendar.mcp.run 
     ports:
       - "8002:8002"
     env_file: .env
@@ -74,12 +72,13 @@ services:
 
   telegram-bot:
     build: .
-    command: >
-      uv run python -m src.services.telegram.bot.handlers
+    command: uv run python -m src.services.telegram.bot.main
     env_file: .env
     environment:
       MCP_CALENDAR_HOST: mcp-calendar
       MCP_CALENDAR_PORT: 8002
+    volumes:
+      - agent-storage:/storage  
     networks:
       - app-net
     depends_on:
