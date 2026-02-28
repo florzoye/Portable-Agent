@@ -1,8 +1,11 @@
 from loguru import logger
 from threading import Lock
 from src.enum import DatabaseType
+
 from utils.metaclasses import SingletonLockMeta   
 from src.exceptions import ConfigNotInitializedError
+from langchain_core.runnables import RunnableConfig
+
 
 class ConfigRegistry(metaclass=SingletonLockMeta):
     _initialized = False
@@ -24,6 +27,8 @@ class ConfigRegistry(metaclass=SingletonLockMeta):
             # конфиги с зависимостями
             self._redis_client = None
             self._celery_app = None
+            self._runnable_config = None
+            self._callback_service = None
 
     def _init_simple_configs(self):
         """Инициализация конфигов без зависимостей"""
@@ -94,7 +99,7 @@ class ConfigRegistry(metaclass=SingletonLockMeta):
                 f'✓ LangSmith ENABLED | project={self._callback_service.langsmith_config.LANGCHAIN_PROJECT}'
             )
         else:
-            logger.info('✓ LangSmith tracing DISABLED')
+            logger.success('✓ LangSmith tracing DISABLED')
             
         if self._callback_service.langfuse_config.USE_LANGFUSE:
             if self._callback_service.langfuse_handler:
@@ -105,6 +110,11 @@ class ConfigRegistry(metaclass=SingletonLockMeta):
             logger.info('✓ Langfuse disabled')
         
         logger.success('✓ CALLBACK_SERVICE инициализирован')
+
+        self._runnable_config = RunnableConfig(
+            callbacks=self._callback_service.callbacks
+        )
+        logger.success('✓ RUNNABLE_CONFIG инициализирован')
 
     def initialize(self):
         """Полная инициализация всех конфигов"""
@@ -165,6 +175,11 @@ class ConfigRegistry(metaclass=SingletonLockMeta):
         self._check_initialized()
         return self._callback_service
     
+    @property
+    def RUNNABLE_CONFIG(self):
+        self._check_initialized()
+        return self._runnable_config
+
     @property
     def is_initialized(self) -> bool:
         return self._initialized
