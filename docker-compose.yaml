@@ -1,0 +1,88 @@
+version: "3.9"
+
+networks:
+  app-net:
+    driver: bridge
+
+volumes:
+  sqlite-data:
+
+services:
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    networks:
+      - app-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  fastapi-calendar:
+    build: .
+    command: >
+      uv run python -m src.services.calendar.server.main
+    ports:
+      - "8001:8001"
+    env_file: .env
+    environment:
+      FASTAPI_CALENDAR_PORT: 8001
+      FASTAPI_CALENDAR_HOST: fastapi-calendar
+      GOOGLE_CALENDAR_REDIRECT_URI: "http://localhost:8001/calendar/oauth/callback"
+    volumes:
+      # SQLite файл живёт в volume, не теряется при пересборке
+      - sqlite-data:/app/data/db
+    networks:
+      - app-net
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  mcp-calendar:
+    build: .
+    command: >
+      uv run python -m src.services.calendar.mcp.main
+    ports:
+      - "8002:8002"
+    env_file: .env
+    environment:
+      MCP_CALENDAR_PORT: 8002
+      FASTAPI_CALENDAR_HOST: fastapi-calendar
+      FASTAPI_CALENDAR_PORT: 8001
+    networks:
+      - app-net
+    depends_on:
+      fastapi-calendar:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8002/sse')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  telegram-bot:
+    build: .
+    command: >
+      uv run python -m src.services.telegram.bot.handlers
+    env_file: .env
+    environment:
+      MCP_CALENDAR_HOST: mcp-calendar
+      MCP_CALENDAR_PORT: 8002
+    networks:
+      - app-net
+    depends_on:
+      mcp-calendar:
+        condition: service_healthy
+    restart: unless-stopped
