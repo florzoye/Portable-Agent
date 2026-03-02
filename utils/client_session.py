@@ -2,6 +2,7 @@ import aiohttp
 from typing import Any, Optional
 from utils.const import GOOGLE_CALENDAR_URI
 
+
 class AsyncHTTPClient:
     def __init__(self, base_url: str = GOOGLE_CALENDAR_URI, timeout: int = 30):
         self.base_url = base_url.rstrip("/") + "/"
@@ -22,21 +23,51 @@ class AsyncHTTPClient:
 
     def _get_session(self) -> aiohttp.ClientSession:
         if not self._session:
-            raise RuntimeError
+            raise RuntimeError("HTTP session is not initialized")
         return self._session
 
-    async def get(self, path: str, params: Optional[dict] = None) -> tuple[int, Any]:
+    async def _handle_response(self, r: aiohttp.ClientResponse) -> tuple[int, Any]:
+        content_type = r.headers.get("content-type", "")
+
+        if "application/json" in content_type:
+            try:
+                data = await r.json()
+            except Exception:
+                # битый JSON — редкий, но возможный кейс
+                data = await r.text()
+        else:
+            data = await r.text()
+
+        return r.status, data
+
+    async def get(
+        self,
+        path: str,
+        params: Optional[dict] = None
+    ) -> tuple[int, Any]:
         async with self._get_session().get(path, params=params) as r:
-            return r.status, await r.json()
+            return await self._handle_response(r)
 
-    async def post(self, path: str, json: Optional[dict] = None) -> tuple[int, Any]:
+    async def post(
+        self,
+        path: str,
+        json: Optional[dict] = None
+    ) -> tuple[int, Any]:
         async with self._get_session().post(path, json=json) as r:
-            return r.status, await r.json()
+            return await self._handle_response(r)
 
-    async def patch(self, path: str, json: Optional[dict] = None) -> tuple[int, Any]:
+    async def patch(
+        self,
+        path: str,
+        json: Optional[dict] = None
+    ) -> tuple[int, Any]:
         async with self._get_session().patch(path, json=json) as r:
-            return r.status, await r.json()
+            return await self._handle_response(r)
 
-    async def delete(self, path: str, params: Optional[dict] = None) -> tuple[int, Any]:
+    async def delete(
+        self,
+        path: str,
+        params: Optional[dict] = None
+    ) -> tuple[int, Any]:
         async with self._get_session().delete(path, params=params) as r:
-            return r.status, await r.json()
+            return await self._handle_response(r)
