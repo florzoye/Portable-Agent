@@ -57,7 +57,6 @@ class GoogleCalendarService:
         end_time: datetime,
         description: Optional[str] = None,
         location: Optional[str] = None,
-        attendees: Optional[list[str]] = None,
         timezone: str = "UTC"
     ) -> dict:
         return await self.calendar.create_event(
@@ -67,7 +66,6 @@ class GoogleCalendarService:
             end_time=end_time,
             description=description,
             location=location,
-            attendees=attendees,
             timezone=timezone
         )
 

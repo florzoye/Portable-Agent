@@ -210,7 +210,6 @@ async def create_event(
             end_time=data.end_time,
             description=data.description,
             location=data.location,
-            attendees=data.attendees,
             timezone=data.timezone,
         )
         return EventResponse(event=event)

@@ -70,7 +70,6 @@ class CalendarService:
         end_time: datetime,
         description: Optional[str] = None,
         location: Optional[str] = None,
-        attendees: Optional[list[str]] = None,  
         timezone: str = "UTC"
     ) -> dict:
         user = await self._get_user(tg_id)
@@ -86,8 +85,6 @@ class CalendarService:
             event_body["description"] = description
         if location:
             event_body["location"] = location
-        if attendees:
-            event_body["attendees"] = [{"email": email} for email in attendees]
 
         result = await self.credentials_manager._run_sync(
             service.events().insert(
