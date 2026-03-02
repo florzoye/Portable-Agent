@@ -1,6 +1,7 @@
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime, date
 from pydantic import BaseModel, Field, field_validator
+
 
 class CreateEventRequest(BaseModel):
     user_id: str | int  = Field(..., example="123")

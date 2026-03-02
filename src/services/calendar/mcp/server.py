@@ -106,24 +106,19 @@ async def search_events(tg_id: int, query: str, days_ahead: int = 30) -> str:
         lines.append(format_event(e))
     return "\n".join(lines)
 
-
-@mcp.tool(description="Получить события за диапазон дат (например, с 1 по 28 февраля)")
+@mcp.tool(description="Получить события за диапазон дат")
 async def get_events_range(tg_id: int, start: str, end: str) -> str:
     if "T" not in start:
         start = f"{start}T00:00:00Z"
-    elif not start.endswith("Z"):
-        start = f"{start}Z"
-
     if "T" not in end:
         end = f"{end}T23:59:59Z"
-    elif not end.endswith("Z"):
-        end = f"{end}Z"
 
     payload = EventsRangeParams(
         user_id=tg_id,
         start=start,
         end=end
     )
+
     async with AsyncHTTPClient() as api:
         status, data = await api.post(
             "/calendar/events/range",
@@ -131,9 +126,13 @@ async def get_events_range(tg_id: int, start: str, end: str) -> str:
         )
 
     if status == 401:
-        return "❌ Пользователь не авторизован"
+        return "❌ Пользователь не авторизован в Google Calendar"
+
     if status != 200:
-        return f"❌ Ошибка сервера: {status}"
+        return f"❌ Ошибка сервера ({status}): {data}"
+
+    if not isinstance(data, dict):
+        return f"❌ Некорректный ответ сервера: {data}"
 
     events = data.get("events", [])
     if not events:
@@ -143,7 +142,6 @@ async def get_events_range(tg_id: int, start: str, end: str) -> str:
     for e in events:
         lines.append(format_event(e))
     return "\n".join(lines)
-
 
 
 @mcp.tool(description="Получить подробную информацию о событии по его ID")
@@ -168,18 +166,14 @@ async def get_event(tg_id: int, event_id: str) -> str:
 
     return format_event(data.get("event", {}))
 
-@mcp.tool(description="Получить события на конкретный день (например, 26 февраля 2026)")
+@mcp.tool(description="Получить события на конкретный день")
 async def get_events_by_date(tg_id: int, date: str) -> str:
-    """
-    Args:
-        tg_id: Telegram ID пользователя
-        date: Дата в формате YYYY-MM-DD (например, 2026-02-26)
-    """
     payload = EventsRangeParams(
         user_id=tg_id,
         start=f"{date}T00:00:00Z",
         end=f"{date}T23:59:59Z"
     )
+
     async with AsyncHTTPClient() as api:
         status, data = await api.post(
             "/calendar/events/range",
@@ -187,9 +181,13 @@ async def get_events_by_date(tg_id: int, date: str) -> str:
         )
 
     if status == 401:
-        return "❌ Пользователь не авторизован"
+        return "❌ Пользователь не авторизован в Google Calendar"
+
     if status != 200:
-        return f"❌ Ошибка сервера: {status}"
+        return f"❌ Ошибка сервера ({status}): {data}"
+
+    if not isinstance(data, dict):
+        return f"❌ Некорректный ответ сервера: {data}"
 
     events = data.get("events", [])
     if not events:
@@ -199,7 +197,6 @@ async def get_events_by_date(tg_id: int, date: str) -> str:
     for e in events:
         lines.append(format_event(e))
     return "\n".join(lines)
-
 
 @mcp.tool(description="Создать новое событие в Google Calendar")
 async def create_event(
