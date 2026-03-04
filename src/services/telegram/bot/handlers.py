@@ -4,17 +4,11 @@ from aiogram.types import Message
 from aiogram.enums import ContentType
 from aiogram import Bot, Dispatcher, F
 
-from langgraph.checkpoint.memory import MemorySaver
-from langgraph.graph.state import CompiledStateGraph
-
 from src.agents.llms.initializer import LLMInitializer
-from src.agents.tools.calendar import init_calendar_client, close_calendar_client, get_calendar_tools
-from src.agents.prompts.system import AgentSystemPrompt
-from src.factories.agents_factory import AgentsFactory
+from src.agents.tools.calendar import init_calendar_client, close_calendar_client
+from src.factories.checkpointer_factory import get_checkpointer, close_checkpointer
+from src.services.telegram.bot.dependencies import get_agent
 from data import get_config
-
-_checkpointer = MemorySaver()
-_agents: dict[int, CompiledStateGraph] = {}
 
 _bot: Bot | None = None
 _main_loop: asyncio.AbstractEventLoop | None = None
@@ -33,49 +27,27 @@ def set_main_loop(loop: asyncio.AbstractEventLoop) -> None:
 async def on_startup():
     await init_calendar_client()
     await LLMInitializer.initialize()
+
+    await get_checkpointer()
+
     logger.info("🤖 Ассистент запущен")
 
 
 async def on_shutdown():
     await close_calendar_client()
+    await close_checkpointer()
     logger.info("🤖 Ассистент остановлен")
 
 
 async def send_message(tg_id: int, text: str) -> None:
     if _bot is None:
         raise RuntimeError("Telegram bot not initialized")
-    if _main_loop is None:
-        raise RuntimeError("Main loop not set")
 
-    try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        loop = None
-
-    coro = _bot.send_message(
+    await _bot.send_message(
         chat_id=tg_id,
         text=text,
         disable_web_page_preview=True,
     )
-
-    if loop is _main_loop:
-        await coro
-    else:
-        asyncio.run_coroutine_threadsafe(coro, _main_loop).result(timeout=10)
-
-
-async def _get_or_create_agent(tg_id: int) -> CompiledStateGraph:
-    if tg_id not in _agents:
-        _agents[tg_id] = await AgentsFactory(
-            name="tg-assistant",
-            model=LLMInitializer.get_llms()[0],
-            tools=await get_calendar_tools(),
-            system_prompt=AgentSystemPrompt(),
-            checkpointer=_checkpointer,
-            tg_id=tg_id,
-        ).aget_agent()
-        logger.info(f"✓ Агент создан для tg_id={tg_id}")
-    return _agents[tg_id]
 
 
 def register_handlers(dp: Dispatcher):
@@ -87,7 +59,7 @@ def register_handlers(dp: Dispatcher):
         cfg = get_config()
 
         try:
-            agent = await _get_or_create_agent(tg_id)
+            agent = await get_agent(tg_id)
 
             result = await agent.ainvoke(
                 {"messages": [{"role": "user", "content": text}]},
