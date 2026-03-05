@@ -23,6 +23,7 @@ class ConfigRegistry(metaclass=SingletonLockMeta):
             self._base_llm_config = None
             self._ollama_config = None
             self._ports_config = None
+            self._openai_config = None
 
             # конфиги с зависимостями
             self._redis_client = None
@@ -37,6 +38,7 @@ class ConfigRegistry(metaclass=SingletonLockMeta):
         from data.configs.tg_config import TelegramSettings
         from data.configs.llm_config import BaseLLMConfig
         from data.configs.ollama_config import OllamaConfig
+        from data.configs.openai_config import OpenAIConfig
 
         self._google_config = GoogleSettings()
         logger.success('✓ GoogleSettings инициализирован')
@@ -55,6 +57,9 @@ class ConfigRegistry(metaclass=SingletonLockMeta):
 
         self._ollama_config = OllamaConfig()
         logger.success('✓ OllamaConfig инициализирован')
+        
+        self._openai_config = OpenAIConfig()
+        logger.success('✓ OpenAIConfig инициализирован')
 
     def _init_brokers(self):
         """Инициализация брокеров или очередей"""
@@ -179,6 +184,11 @@ class ConfigRegistry(metaclass=SingletonLockMeta):
     def RUNNABLE_CONFIG(self):
         self._check_initialized()
         return self._runnable_config
+    
+    @property
+    def OPENAI_CONFIG(self):
+        self._check_initialized()
+        return self._openai_config
 
     @property
     def is_initialized(self) -> bool:
