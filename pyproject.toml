@@ -31,5 +31,6 @@ dependencies = [
     "psycopg[binary]>=3.3.3",
     "pydantic>=2.12.5",
     "python-dotenv>=1.2.1",
+    "questionary>=2.1.1",
     "sqlalchemy[asyncio]>=2.0.46",
 ]
