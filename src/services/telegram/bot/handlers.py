@@ -70,7 +70,7 @@ def register_handlers(dp: Dispatcher):
             )
 
             response = result["messages"][-1].content
-            await message.answer(response)
+            await message.answer(response, parse_mode='HTML')
 
         except Exception as e:
             logger.exception(f"Agent error for tg_id={tg_id}: {e}")
