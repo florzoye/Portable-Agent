@@ -1,6 +1,12 @@
+import sys
 import questionary
+from loguru import logger
 from langchain_core.language_models import BaseChatModel
 from src.agents.llms.base import BaseLLM
+
+
+def _is_interactive() -> bool:
+    return sys.stdin.isatty()
 
 
 def _model_label(llm: BaseChatModel, wrapper: BaseLLM) -> str:
@@ -19,6 +25,12 @@ def select_model(
     if len(llms) == 1:
         return llms[0]
 
+    if not _is_interactive():
+        chosen = llms[0]
+        label = _model_label(chosen, wrappers[0])
+        logger.info(f"Нет TTY — модель выбрана автоматически: {label}")
+        return chosen
+
     choices = {
         _model_label(llm, wrapper): llm
         for wrapper, llm in zip(wrappers, llms)
@@ -34,7 +46,7 @@ def select_model(
             ("question",    "bold"),
             ("answer",      "fg:green bold"),
         ]),
-    ).unsafe_ask() 
+    ).unsafe_ask()
 
     if answer is None:
         raise KeyboardInterrupt
