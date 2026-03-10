@@ -26,7 +26,7 @@ class GetOllamaLLM(BaseLLM):
             )
 
             self._initialized = True
-            logger.success("✓ GetOllamaLLM инициализирован")
+            logger.success("✓ GetOllamaLLM initialized")
 
         return self._llm
 

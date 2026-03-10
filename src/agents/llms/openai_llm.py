@@ -26,7 +26,7 @@ class GetOpenAILLM(BaseLLM):
             )
 
             self._initialized = True
-            logger.success("✓ GetOpenAILLM инициализирован")
+            logger.success("✓ GetOpenAILLM initialized")
 
         return self._llm
 

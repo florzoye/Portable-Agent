@@ -47,7 +47,7 @@ class GoogleAuthService:
     async def exchange_code(self, tg_id: int, code: str) -> bool:
         user = await self.users_repo.get_user_by_tg_id(tg_id)
         if not user:
-            raise ValueError("Пользователь не найден")
+            raise ValueError("User not found")
 
         flow = self._get_flow()
         await self.credentials_manager._run_sync(flow.fetch_token, code=code)

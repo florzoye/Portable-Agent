@@ -8,7 +8,7 @@ class CreateEventRequest(BaseModel):
     title: str = Field(..., min_length=1, example="Встреча")
     start_time: datetime = Field(..., example="2026-02-20T10:00:00+00:00")
     end_time: datetime = Field(..., example="2026-02-20T11:00:00+00:00")
-    description: Optional[str] = Field(None, example="Обсуждение проекта")
+    description: Optional[str] = Field(None, example="Discussion of the project")
     location: Optional[str] = Field(None, example="Zoom")
 
 class EventDateTime(BaseModel):
@@ -20,7 +20,7 @@ class EventDateTime(BaseModel):
 
 class EventCreator(BaseModel):
     email: Optional[str] = Field(None, example="user@example.com")
-    displayName: Optional[str] = Field(None, example="Иван Иванов")
+    displayName: Optional[str] = Field(None, example="Ivan Ivanov")
     self: Optional[bool] = Field(None, example=False)
 
 class EventModel(BaseModel):

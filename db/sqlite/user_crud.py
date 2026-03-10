@@ -46,7 +46,7 @@ class UsersSQLite(UsersBase):
         try:
             existing = await self.get_user_by_tg_id(tg_id)
             if existing:
-                self.logger.warning(f"⚠️ Пользователь {tg_id} уже существует")
+                self.logger.warning(f"⚠️ User {tg_id} already exists")
                 return existing
 
             await self.db.execute(insert_user_sql(), {
@@ -56,10 +56,10 @@ class UsersSQLite(UsersBase):
                 "google_id": google_id
             })
             user = await self.get_user_by_tg_id(tg_id)
-            self.logger.info(f"✅ Пользователь добавлен: tg_id={tg_id}")
+            self.logger.info(f"✅ User added: tg_id={tg_id}")
             return user
         except Exception as e:
-            self.logger.error(f"❌ Ошибка при добавлении пользователя {tg_id}: {e}", exc_info=True)
+            self.logger.error(f"❌ Error when adding a user {tg_id}: {e}", exc_info=True)
             return None
 
     async def get_user_by_tg_id(self, tg_id: int) -> Optional[UserModel]:
@@ -67,7 +67,7 @@ class UsersSQLite(UsersBase):
             row = await self.db.fetchone(select_user_by_tg_id_sql(), {"tg_id": tg_id})
             return self._row_to_user(row) if row else None
         except Exception as e:
-            self.logger.error(f"❌ Ошибка при получении пользователя {tg_id}: {e}")
+            self.logger.error(f"❌ Error when receiving the user {tg_id}: {e}")
             return None
 
     async def get_user_by_id(self, user_id: int) -> Optional[UserModel]:
@@ -75,7 +75,7 @@ class UsersSQLite(UsersBase):
             row = await self.db.fetchone(select_user_by_id_sql(), {"id": user_id})
             return self._row_to_user(row) if row else None
         except Exception as e:
-            self.logger.error(f"❌ Ошибка при получении пользователя id={user_id}: {e}")
+            self.logger.error(f"❌ Error when receiving the user id={user_id}: {e}")
             return None
 
     async def get_user_by_google_id(self, google_id: str) -> Optional[UserModel]:
@@ -83,7 +83,7 @@ class UsersSQLite(UsersBase):
             row = await self.db.fetchone(select_user_by_google_id_sql(), {"google_id": google_id})
             return self._row_to_user(row) if row else None
         except Exception as e:
-            self.logger.error(f"❌ Ошибка при получении пользователя google_id={google_id}: {e}")
+            self.logger.error(f"❌ Error when receiving the user google_id={google_id}: {e}")
             return None
 
     async def get_all_users(self) -> List[UserModel]:
@@ -91,7 +91,7 @@ class UsersSQLite(UsersBase):
             rows = await self.db.fetchall(select_all_users_sql())
             return [self._row_to_user(row) for row in rows]
         except Exception as e:
-            self.logger.error(f"❌ Ошибка при получении всех пользователей: {e}")
+            self.logger.error(f"❌Error when receiving the all users: {e}")
             return []
 
     async def user_exists(self, tg_id: int) -> bool:
@@ -99,7 +99,7 @@ class UsersSQLite(UsersBase):
             row = await self.db.fetchone(user_exists_by_tg_id_sql(), {"tg_id": tg_id})
             return row is not None
         except Exception as e:
-            self.logger.error(f"❌ Ошибка при проверке существования пользователя {tg_id}: {e}")
+            self.logger.error(f"❌Error checking the user's existence {tg_id}: {e}")
             return False
 
     async def google_id_exists(self, google_id: str) -> bool:
@@ -107,7 +107,7 @@ class UsersSQLite(UsersBase):
             row = await self.db.fetchone(user_exists_by_google_id_sql(), {"google_id": google_id})
             return row is not None
         except Exception as e:
-            self.logger.error(f"❌ Ошибка при проверке google_id: {e}")
+            self.logger.error(f"❌ Error during verification google_id: {e}")
             return False
 
     async def update_user(
@@ -120,7 +120,7 @@ class UsersSQLite(UsersBase):
         try:
             current_user = await self.get_user_by_tg_id(tg_id)
             if not current_user:
-                self.logger.warning(f"⚠️ Пользователь {tg_id} не найден для обновления")
+                self.logger.warning(f"⚠️ User {tg_id} couldn't be found for updating")
                 return False
 
             await self.db.execute(update_user_sql(), {
@@ -129,28 +129,28 @@ class UsersSQLite(UsersBase):
                 "email": email if email is not None else current_user.email,
                 "google_id": google_id if google_id is not None else current_user.google_id
             })
-            self.logger.info(f"✅ Пользователь обновлен: tg_id={tg_id}")
+            self.logger.info(f"✅ User updated: tg_id={tg_id}")
             return True
         except Exception as e:
-            self.logger.error(f"❌ Ошибка при обновлении пользователя {tg_id}: {e}", exc_info=True)
+            self.logger.error(f"❌ Error when updating usersя {tg_id}: {e}", exc_info=True)
             return False
 
     async def delete_user(self, tg_id: int) -> bool:
         try:
             await self.db.execute(delete_user_sql(), {"tg_id": tg_id})
-            self.logger.info(f"✅ Пользователь удален: tg_id={tg_id}")
+            self.logger.info(f"✅ User deleted: tg_id={tg_id}")
             return True
         except Exception as e:
-            self.logger.error(f"❌ Ошибка при удалении пользователя {tg_id}: {e}")
+            self.logger.error(f"❌Error when deleting a user {tg_id}: {e}")
             return False
 
     async def delete_all_tables(self) -> bool:
         try:
             await self.db.execute(drop_all_tables_sql())
-            self.logger.info("✅ Все таблицы удалены")
+            self.logger.info("✅ All tables deleted")
             return True
         except Exception as e:
-            self.logger.error(f"❌ Ошибка при удалении таблиц: {e}")
+            self.logger.error(f"❌ Error for deleted tables: {e}")
             return False
 
     def _row_to_user(self, row: dict) -> UserModel:

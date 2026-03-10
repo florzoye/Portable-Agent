@@ -32,11 +32,11 @@ class UsersORM(UsersBase):
             self.session.add(user)
             await self.session.flush()
             await self.session.refresh(user)
-            self.logger.info(f"✅ Пользователь {tg_id} успешно добавлен")
+            self.logger.info(f"✅ User {tg_id} has been successfully added")
             return UserModel.model_validate(user)
         
         except Exception as e:
-            self.logger.error(f"❌ Ошибка при добавлении пользователя {tg_id}: {e}", exc_info=True)
+            self.logger.error(f"❌ Error when adding a user {tg_id}: {e}", exc_info=True)
             return None
 
     async def get_user_by_tg_id(self, tg_id: int) -> Optional[UserModel]:
@@ -47,7 +47,7 @@ class UsersORM(UsersBase):
             user = result.scalar_one_or_none()
             return UserModel.model_validate(user) if user else None
         except Exception as e:
-            self.logger.error(f"❌ Ошибка при получении пользователя {tg_id}: {e}")
+            self.logger.error(f"❌ Error when receiving the user {tg_id}: {e}")
             return None
 
     async def get_user_by_id(self, user_id: int) -> Optional[UserModel]:
@@ -58,7 +58,7 @@ class UsersORM(UsersBase):
             user = result.scalar_one_or_none()
             return UserModel.model_validate(user) if user else None
         except Exception as e:
-            self.logger.error(f"❌ Ошибка при получении пользователя с ID {user_id}: {e}")
+            self.logger.error(f"❌ Error when receiving the user с ID {user_id}: {e}")
             return None
 
     async def get_user_by_google_id(self, google_id: str) -> Optional[Users]:
@@ -69,7 +69,7 @@ class UsersORM(UsersBase):
             user = result.scalar_one_or_none()
             return UserModel.model_validate(user) if user else None
         except Exception as e:
-            self.logger.error(f"❌ Ошибка при получении пользователя с google_id {google_id}: {e}")
+            self.logger.error(f"❌ Error when receiving the user с google_id {google_id}: {e}")
             return None
 
     async def get_all_users(self) -> List[UserModel]:
@@ -78,7 +78,7 @@ class UsersORM(UsersBase):
             users = result.scalars().all()
             return [UserModel.model_validate(u) for u in users]
         except Exception as e:
-            self.logger.error(f"❌ Ошибка при получении всех пользователей: {e}")
+            self.logger.error(f"❌Error when receiving the all users: {e}")
             return []
 
     async def user_exists(self, tg_id: int) -> bool:
@@ -88,7 +88,7 @@ class UsersORM(UsersBase):
             )
             return result.scalar_one_or_none() is not None
         except Exception as e:
-            self.logger.error(f"❌ Ошибка при проверке существования пользователя {tg_id}: {e}")
+            self.logger.error(f"❌ Error checking the user's existence {tg_id}: {e}")
             return False
 
     async def google_id_exists(self, google_id: str) -> bool:
@@ -98,7 +98,7 @@ class UsersORM(UsersBase):
             )
             return result.scalar_one_or_none() is not None
         except Exception as e:
-            self.logger.error(f"❌ Ошибка при проверке существования google_id {google_id}: {e}")
+            self.logger.error(f"❌Error checking the existence google_id {google_id}: {e}")
             return False
 
     async def update_user(
@@ -111,7 +111,7 @@ class UsersORM(UsersBase):
         try:
             user = await self.get_user_by_tg_id(tg_id)
             if not user:
-                self.logger.warning(f"⚠️ Пользователь {tg_id} не найден для обновления")
+                self.logger.warning(f"⚠️ User {tg_id} not found for update")
                 return False
             
             update_data = {}
@@ -128,10 +128,10 @@ class UsersORM(UsersBase):
             await self.session.execute(
                 update(Users).where(Users.tg_id == tg_id).values(**update_data)
             )
-            self.logger.info(f"✅ Пользователь {tg_id} успешно обновлен")
+            self.logger.info(f"✅User {tg_id} has been successfully updated")
             return True
         except Exception as e:
-            self.logger.error(f"❌ Ошибка при обновлении пользователя {tg_id}: {e}")
+            self.logger.error(f"❌Error when updating the user {tg_id}: {e}")
             return False
 
     async def delete_user(self, tg_id: int) -> bool:
@@ -139,10 +139,10 @@ class UsersORM(UsersBase):
             await self.session.execute(
                 delete(Users).where(Users.tg_id == tg_id)
             )
-            self.logger.info(f"✅ Пользователь {tg_id} удален")
+            self.logger.info(f"✅ User {tg_id} has been deleted")
             return True
         except Exception as e:
-            self.logger.error(f"❌ Ошибка при удалении пользователя {tg_id}: {e}")
+            self.logger.error(f"❌ Error when deleting user {tg_id}: {e}")
             return False
     
     async def delete_all_tables(self) -> bool:

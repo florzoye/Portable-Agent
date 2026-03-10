@@ -28,7 +28,7 @@ def select_model(
     if not _is_interactive():
         chosen = llms[0]
         label = _model_label(chosen, wrappers[0])
-        logger.info(f"Нет TTY — модель выбрана автоматически: {label}")
+        logger.info(f"No TTY - the model is selected automatically: {label}")
         return chosen
 
     choices = {
@@ -37,7 +37,7 @@ def select_model(
     }
 
     answer = questionary.select(
-        "Выбери модель:",
+        "Choose a model:",
         choices=list(choices.keys()),
         style=questionary.Style([
             ("selected",    "fg:green bold"),

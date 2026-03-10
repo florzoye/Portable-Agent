@@ -28,5 +28,5 @@ async def close_calendar_client() -> None:
 
 async def get_calendar_tools() -> list[BaseTool]:
     if not _calendar_client_tools:
-        raise RuntimeError("Вызови init_calendar_client() при старте")
+        raise RuntimeError("Call init_calendar_client() in start")
     return _calendar_client_tools

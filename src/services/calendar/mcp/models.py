@@ -17,7 +17,7 @@ class CreateEventParams(BaseModel):
     @classmethod
     def end_after_start(cls, end_time, info):
         if "start_time" in info.data and end_time <= info.data["start_time"]:
-            raise ValueError("конечное время меньше начального")
+            raise ValueError("the end time is less than the start time")
         return end_time
 
 
@@ -40,5 +40,5 @@ class EventsRangeParams(BaseModel):
     @classmethod
     def end_after_start(cls, end, info):
         if "start" in info.data and end <= info.data["start"]:
-            raise ValueError("конечное время меньше начального")
+            raise ValueError("the end time is less than the start time")
         return end

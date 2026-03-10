@@ -11,8 +11,8 @@ _pool: AsyncConnectionPool | None = None
 
 async def get_checkpointer() -> BaseCheckpointSaver:
     """
-    Возвращает синглтон AsyncPostgresSaver на основе пула соединений.
-    Вызывать один раз при старте приложения (on_startup).
+    Returns a singleton AsyncPostgresSaver based on a connection pool.
+    Call once when the application starts (on_startup).
     """
     global _checkpointer, _pool
 
@@ -44,7 +44,7 @@ async def get_checkpointer() -> BaseCheckpointSaver:
 
     await _checkpointer.setup()
 
-    logger.info("✅ AsyncPostgresSaver инициализирован")
+    logger.info("✅ AsyncPostgresSaver initialized")
     return _checkpointer
 
 
@@ -55,4 +55,4 @@ async def close_checkpointer() -> None:
         await _pool.close()
         _pool = None
         _checkpointer = None
-        logger.info("✅ AsyncPostgresSaver закрыт")
+        logger.info("✅ AsyncPostgresSaver is closed")

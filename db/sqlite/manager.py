@@ -13,9 +13,9 @@ class AsyncDatabaseManager:
             try:
                 self._conn = await aiosqlite.connect(self.db_path)
                 self._conn.row_factory = aiosqlite.Row
-                self.logger.debug(f"✅ Подключено к SQLite: {self.db_path}")
+                self.logger.debug(f"✅ SQLite Connected: {self.db_path}")
             except Exception as e:
-                self.logger.error(f"❌ Ошибка подключения к SQLite: {e}")
+                self.logger.error(f"❌ Error SQLite connection: {e}")
                 raise
 
     async def close(self):
@@ -23,9 +23,9 @@ class AsyncDatabaseManager:
             if self._conn is not None:
                 await self._conn.close()
                 self._conn = None
-                self.logger.info("✅ Соединение с SQLite закрыто")
+                self.logger.info("✅ Connection to SQLite is closed")
         except Exception as e:
-            self.logger.error(f"⚠️ Ошибка при закрытии SQLite: {e}")
+            self.logger.error(f"⚠️ Error when closing SQLite: {e}")
 
     async def execute(self, query: str, params: Dict = None):
         await self.connect()
@@ -36,7 +36,7 @@ class AsyncDatabaseManager:
                 await self._conn.execute(query)
             await self._conn.commit()
         except Exception as e:
-            self.logger.error(f"❌ Ошибка выполнения запроса: {e}\nQuery: {query}")
+            self.logger.error(f"❌ Request execution error{e}\nQuery: {query}")
             raise
 
     async def fetchall(self, query: str, params: Dict = None) -> List[Dict]:
@@ -46,7 +46,7 @@ class AsyncDatabaseManager:
             rows = await cursor.fetchall()
             return [dict(row) for row in rows]
         except Exception as e:
-            self.logger.error(f"❌ Ошибка fetchall: {e}\nQuery: {query}")
+            self.logger.error(f"❌ Error fetchall: {e}\nQuery: {query}")
             raise
 
     async def fetchone(self, query: str, params: Dict = None) -> Optional[Dict]:
@@ -56,7 +56,7 @@ class AsyncDatabaseManager:
             row = await cursor.fetchone()
             return dict(row) if row else None
         except Exception as e:
-            self.logger.error(f"❌ Ошибка fetchone: {e}\nQuery: {query}")
+            self.logger.error(f"❌ Errpr fetchone: {e}\nQuery: {query}")
             raise
     
     @property

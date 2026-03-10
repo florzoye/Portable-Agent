@@ -127,13 +127,13 @@ class Database:
                 await conn.execute(text("DROP SCHEMA public CASCADE"))
                 await conn.execute(text("CREATE SCHEMA public"))
 
-            self.logger.info("✅ Все таблицы удалены (PostgreSQL)")
+            self.logger.info("✅ ALl tables delete (PostgreSQL)")
         else:
             async with self.transaction() as session:
                 tokens_repo = self.get_tokens_repo(session)
 
                 await tokens_repo.delete_all_tables()
-            self.logger.info("✅ Все таблицы удалены (Sqlite)")
+            self.logger.info("✅ ALl tables delete (Sqlite)")
 
     async def close(self):
         if self.sqlite_manager:

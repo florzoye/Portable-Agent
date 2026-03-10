@@ -73,7 +73,7 @@ async def revoke_access(
 
 @router.get("/success")
 async def success_url():
-    return await status("Calendar подключен!")
+    return await status("Calendar connected!")
 
 
 #  Users 

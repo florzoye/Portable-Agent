@@ -16,7 +16,7 @@ class ConfigRegistry(metaclass=SingletonLockMeta):
             if self._initialized:
                 return
 
-            # конфиги без зависимостей
+            # config without depends
             self._google_config = None
             self._db_config = None
             self._tg_settings = None
@@ -25,14 +25,14 @@ class ConfigRegistry(metaclass=SingletonLockMeta):
             self._ports_config = None
             self._openai_config = None
 
-            # конфиги с зависимостями
+            # config with depends
             self._redis_client = None
             self._celery_app = None
             self._runnable_config = None
             self._callback_service = None
 
     def _init_simple_configs(self):
-        """Инициализация конфигов без зависимостей"""
+        """init simple config """
         from data.configs.google_config import GoogleSettings
         from data.configs.database_config import DBConfig
         from data.configs.tg_config import TelegramSettings
@@ -41,34 +41,35 @@ class ConfigRegistry(metaclass=SingletonLockMeta):
         from data.configs.openai_config import OpenAIConfig
 
         self._google_config = GoogleSettings()
-        logger.success('✓ GoogleSettings инициализирован')
+        logger.success('✓ GoogleSettings init!')
 
         self._db_config = DBConfig()
-        logger.success('✓ DBConfig инициализирован')
+        logger.success('✓ DBConfig init!')
 
         if self._db_config.DB_TYPE not in [DatabaseType.SQLITE.value, DatabaseType.POSTGRESQL.value]:
             raise ConfigNotInitializedError(f'Неизвестный тип базы данных: {self._db_config.DB_TYPE}')
         
         self._tg_settings = TelegramSettings()
-        logger.success('✓ TelegramSettings инициализирован')
+        logger.success('✓ TelegramSettings init!')
 
         self._base_llm_config = BaseLLMConfig()
-        logger.success('✓ BaseLLMConfig инициализирован')
+        logger.success('✓ BaseLLMConfig init!')
 
         self._ollama_config = OllamaConfig()
-        logger.success('✓ OllamaConfig инициализирован')
+        logger.success('✓ OllamaConfig init!')
         
         self._openai_config = OpenAIConfig()
-        logger.success('✓ OpenAIConfig инициализирован')
+        logger.success('✓ OpenAIConfig init!')
 
     def _init_brokers(self):
-        """Инициализация брокеров или очередей"""
+        """initializing brokers and queue"""
         from data.configs.redis_config import RedisSettings
         from redis.asyncio import Redis
         from celery import Celery
 
         settings = RedisSettings()
         redis_url = f"redis://:{settings.REDIS_PASSWORD}@{settings.REDIS_HOST}:{settings.REDIS_PORT}/0"
+        print(redis_url)
 
         self._celery_app = Celery("celery_worker", broker=redis_url, backend=redis_url)
         self._celery_app.conf.update(
@@ -90,10 +91,10 @@ class ConfigRegistry(metaclass=SingletonLockMeta):
             decode_responses=True,  
         )
 
-        logger.success('✓ REDIS_CLIENT и CELERY_APP инициализированы')
+        logger.success('✓ REDIS_CLIENT and CELERY_APP init!')
 
     def _init_services(self):
-        """Инициализация сервисов с зависимостями"""
+        """init config with depends"""
         from data.configs.callbacks_config import GlobalCallbacksService
         
         self._callback_service = GlobalCallbacksService()
@@ -114,26 +115,26 @@ class ConfigRegistry(metaclass=SingletonLockMeta):
         else:
             logger.info('✓ Langfuse disabled')
         
-        logger.success('✓ CALLBACK_SERVICE инициализирован')
+        logger.success('✓ CALLBACK_SERVICE init!')
 
         self._runnable_config = RunnableConfig(
             callbacks=self._callback_service.callbacks
         )
-        logger.success('✓ RUNNABLE_CONFIG инициализирован')
+        logger.success('✓ RUNNABLE_CONFIG init!')
 
     def initialize(self):
-        """Полная инициализация всех конфигов"""
+        """Full initializing"""
         with self._lock:
             if self._initialized:
-                logger.warning('⚠ Конфигурация уже инициализирована, пропуск повторной инициализации')
+                logger.warning('⚠ Configuration init!, pass retry init')
                 return
 
-            logger.info('Начало инициализации конфигурации...')
+            logger.info('Start initializing the configuration...')
             self._init_simple_configs()
             self._init_brokers()
             self._init_services()
             self._initialized = True
-            logger.success('🎉 Все конфигурации успешно инициализированы')
+            logger.success('🎉 All configuration succes init!')
 
     @property
     def GOOGLE_CONFIG(self):

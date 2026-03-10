@@ -4,10 +4,11 @@ from abc import ABC, abstractmethod
 
 from src.models import UserModel, TokenModel
 
+
 class UsersBase(ABC):
     @abstractmethod
     async def create_tables(self) -> bool:
-        """Создать таблицу пользователей"""
+        """Create user tables"""
         ...
 
     @abstractmethod
@@ -20,41 +21,41 @@ class UsersBase(ABC):
         google_id: Optional[str] = None
     ) -> Optional[UserModel]:
         """
-        Добавить пользователя
-        
+        Add a new user.
+
         Returns:
-            Optional[Any]: UserModel для SQLite или Users для PostgreSQL
+            Optional[UserModel]: UserModel for SQLite or Users for PostgreSQL
         """
         ...
 
     @abstractmethod
     async def get_user_by_tg_id(self, tg_id: int) -> Optional[UserModel]:
-        """Получить пользователя по Telegram ID"""
+        """Get a user by Telegram ID"""
         ...
 
     @abstractmethod
     async def get_user_by_id(self, user_id: int) -> Optional[UserModel]:
-        """Получить пользователя по внутреннему ID"""
+        """Get a user by internal ID"""
         ...
 
     @abstractmethod
     async def get_user_by_google_id(self, google_id: str) -> Optional[UserModel]:
-        """Получить пользователя по Google ID"""
+        """Get a user by Google ID"""
         ...
 
     @abstractmethod
     async def get_all_users(self) -> List[UserModel]:
-        """Получить всех пользователей"""
+        """Get all users"""
         ...
 
     @abstractmethod
     async def user_exists(self, tg_id: int) -> bool:
-        """Проверить существование пользователя по Telegram ID"""
+        """Check if a user exists by Telegram ID"""
         ...
 
     @abstractmethod
     async def google_id_exists(self, google_id: str) -> bool:
-        """Проверить существование пользователя по Google ID"""
+        """Check if a user exists by Google ID"""
         ...
 
     @abstractmethod
@@ -67,30 +68,31 @@ class UsersBase(ABC):
         google_id: Optional[str] = None
     ) -> bool:
         """
-        Обновить данные пользователя
-        
-        Note: Для SQLite используются именованные параметры
-              Для PostgreSQL можно использовать **kwargs
+        Update user data.
+
+        Note:
+            SQLite uses named parameters.
+            PostgreSQL can use **kwargs.
         """
         ...
 
     @abstractmethod
     async def delete_user(self, tg_id: int) -> bool:
-        """Удалить пользователя по Telegram ID"""
+        """Delete a user by Telegram ID"""
         ...
 
     @abstractmethod
     async def delete_all_tables(self) -> bool:
-        """Удалить все таблицы (для тестов)"""
+        """Delete all tables (used for testing)"""
         ...
 
 
 class GoogleTokensBase(ABC):
-    """Базовый интерфейс для работы с Google токенами"""
+    """Base interface for working with Google tokens"""
 
     @abstractmethod
     async def create_tables(self) -> bool:
-        """Создать таблицу токенов"""
+        """Create token tables"""
         ...
 
     @abstractmethod
@@ -104,28 +106,30 @@ class GoogleTokensBase(ABC):
         scopes: Optional[str] = None
     ) -> bool:
         """
-        Сохранить или обновить токен
-        
-        Note: scopes используется только в PostgreSQL
+        Save or update a token.
+
+        Note:
+            scopes is used only in PostgreSQL.
         """
         ...
 
     @abstractmethod
     async def get_token(self, user_id: int) -> Optional[TokenModel]:
         """
-        Получить токен по user_id
-        
+        Get a token by user_id.
+
         Returns:
-            Optional[TokenModel]: TokenModel для SQLite или GoogleToken для PostgreSQL
+            Optional[TokenModel]: TokenModel for SQLite or GoogleToken for PostgreSQL
         """
         ...
 
     @abstractmethod
     async def get_token_by_tg_id(self, tg_id: int) -> Optional[TokenModel]:
         """
-        Получить токен по Telegram ID
-        
-        Note: Требует JOIN с таблицей users
+        Get a token by Telegram ID.
+
+        Note:
+            Requires a JOIN with the users table.
         """
         ...
 
@@ -138,20 +142,20 @@ class GoogleTokensBase(ABC):
         refresh_token: Optional[str] = None,
         token_expiry: Optional[datetime] = None
     ) -> bool:
-        """Обновить существующий токен"""
+        """Update an existing token"""
         ...
 
     @abstractmethod
     async def delete_token(self, user_id: int) -> bool:
-        """Удалить токен пользователя"""
+        """Delete a user's token"""
         ...
 
     @abstractmethod
     async def token_exists(self, user_id: int) -> bool:
-        """Проверить существование токена"""
+        """Check if a token exists"""
         ...
 
     @abstractmethod
     async def delete_all_tables(self) -> bool:
-        """Удалить таблицу токенов (для тестов)"""
+        """Delete token tables (used for testing)"""
         ...

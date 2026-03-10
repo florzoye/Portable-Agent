@@ -13,7 +13,7 @@ class RepositoryException(AppException):
 
 
 class UserRepositoryException(RepositoryException):
-    def __init__(self, message: str = "Ошибка репозитория пользователей", original_error: Exception = None):
+    def __init__(self, message: str = "User Repository Error", original_error: Exception = None):
         super().__init__(
             message=message,
             entity="user",
@@ -23,7 +23,7 @@ class UserRepositoryException(RepositoryException):
 
 
 class TokenRepositoryException(RepositoryException):
-    def __init__(self, message: str = "Ошибка репозитория токенов", original_error: Exception = None):
+    def __init__(self, message: str = "Token Repository Error", original_error: Exception = None):
         super().__init__(
             message=message,
             entity="token",
@@ -33,7 +33,7 @@ class TokenRepositoryException(RepositoryException):
 
 
 class UserNotFoundException(RepositoryException):
-    def __init__(self, user_id: int = None, tg_id: int = None, message: str = "Пользователь не найден"):
+    def __init__(self, user_id: int = None, tg_id: int = None, message: str = "User not found"):
         details = {}
         if user_id:
             details['user_id'] = user_id
@@ -48,7 +48,7 @@ class UserNotFoundException(RepositoryException):
 
 
 class TokenNotFoundException(RepositoryException):
-    def __init__(self, user_id: int = None, message: str = "Токен не найден"):
+    def __init__(self, user_id: int = None, message: str = "token not found"):
         details = {'user_id': user_id} if user_id else {}
         super().__init__(
             message=message,

@@ -32,7 +32,7 @@ class SQLAlchemyManager:
     def get_session(self) -> AsyncSession:
         if self.session_maker is None:
             raise RuntimeError(
-                "SQLAlchemy не инициализирована, для начала init()"
+                "SQLAlchemy is not initialized, use init() to start"
             )
         
         return self.session_maker()
@@ -45,10 +45,10 @@ class SQLAlchemyManager:
     def get_engine(self):
         if self.engine is None:
             raise RuntimeError(
-                "SQLAlchemy не инициализирована, для начала init()"
+                "SQLAlchemy is not initialized, use init() to start"
             )
         return self.engine
 
 
-# единственный экземпляр менеджера
+# the only instance of the manager
 sqlalchemy_manager = SQLAlchemyManager()

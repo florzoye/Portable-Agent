@@ -47,11 +47,11 @@ class GoogleTokensORM(GoogleTokensBase):
                 )
                 self.session.add(token)
                 await self.session.flush()
-                self.logger.info(f"✅ Токен для пользователя {user_id} успешно сохранен")
+                self.logger.info(f"✅ The token for user {user_id} has been successfully saved")
                 return True
 
         except Exception as e:
-            self.logger.error(f"❌ Ошибка при сохранении токена для пользователя {user_id}: {e}", exc_info=True)
+            self.logger.error(f"❌ Error saving the token for the user {user_id}: {e}", exc_info=True)
             return False
 
     async def get_token(self, user_id: int) -> Optional[TokenModel]:
@@ -65,7 +65,7 @@ class GoogleTokensORM(GoogleTokensBase):
             token = result.scalar_one_or_none()
             return TokenModel.model_validate(token) if token else None
         except Exception as e:
-            self.logger.error(f"❌ Ошибка при получении токена для пользователя {user_id}: {e}")
+            self.logger.error(f"❌ Error when receiving a token for the user{user_id}: {e}")
             return None
 
     async def get_token_by_tg_id(self, tg_id: int) -> Optional[TokenModel]:
@@ -80,7 +80,7 @@ class GoogleTokensORM(GoogleTokensBase):
             token = result.scalar_one_or_none()
             return TokenModel.model_validate(token) if token else None
         except Exception as e:
-            self.logger.error(f"❌ Ошибка при получении токена по tg_id {tg_id}: {e}")
+            self.logger.error(f"❌ Error when receiving the token by tg_id {tg_id}: {e}")
             return None
 
     async def update_token(
@@ -93,11 +93,11 @@ class GoogleTokensORM(GoogleTokensBase):
         try:
             token = await self.get_token(user_id)
             if not token:
-                self.logger.warning(f"⚠️ Токен для пользователя {user_id} не найден")
+                self.logger.warning(f"⚠️ Token for user {user_id} not found")
                 return False
             return await self._update_token_by_id(token.id, access_token, refresh_token, token_expiry)
         except Exception as e:
-            self.logger.error(f"❌ Ошибка при обновлении токена для пользователя {user_id}: {e}", exc_info=True)
+            self.logger.error(f"❌ Error updating token for user {user_id}: {e}", exc_info=True)
             return False
 
     async def _update_token_by_id(
@@ -121,10 +121,10 @@ class GoogleTokensORM(GoogleTokensBase):
                 .where(GoogleToken.id == token_id)
                 .values(**update_data)
             )
-            self.logger.info(f"✅ Токен id={token_id} успешно обновлен")
+            self.logger.info(f"✅Token id={token_id} has been successfully updated")
             return True
         except Exception as e:
-            self.logger.error(f"❌ Ошибка при обновлении токена id={token_id}: {e}", exc_info=True)
+            self.logger.error(f"❌Error updating token id={token_id}: {e}", exc_info=True)
             return False
 
     async def delete_token(self, user_id: int) -> bool:
@@ -132,10 +132,10 @@ class GoogleTokensORM(GoogleTokensBase):
             await self.session.execute(
                 delete(GoogleToken).where(GoogleToken.user_id == user_id)
             )
-            self.logger.info(f"✅ Токен пользователя {user_id} удален")
+            self.logger.info(f"✅ User token {user_id} has been deleted")
             return True
         except Exception as e:
-            self.logger.error(f"❌ Ошибка при удалении токена пользователя {user_id}: {e}")
+            self.logger.error(f"❌ Error when deleting user token {user_id}: {e}")
             return False
 
     async def token_exists(self, user_id: int) -> bool:
@@ -147,7 +147,7 @@ class GoogleTokensORM(GoogleTokensBase):
             )
             return result.scalar_one_or_none() is not None
         except Exception as e:
-            self.logger.error(f"❌ Ошибка при проверке существования токена для пользователя {user_id}: {e}")
+            self.logger.error(f"❌ Error when checking the existence of a token for user {user_id}: {e}")
             return False
 
     async def delete_all_tables(self) -> bool:

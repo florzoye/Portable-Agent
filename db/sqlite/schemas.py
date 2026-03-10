@@ -1,5 +1,4 @@
 def create_users_table_sql() -> str:
-    """Создание таблицы пользователей"""
     return """
     CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -14,7 +13,6 @@ def create_users_table_sql() -> str:
 
 
 def insert_user_sql() -> str:
-    """Добавление нового пользователя"""
     return """
     INSERT INTO users (tg_id, tg_nick, email, google_id)
     VALUES (:tg_id, :tg_nick, :email, :google_id)
@@ -22,7 +20,6 @@ def insert_user_sql() -> str:
 
 
 def update_user_sql() -> str:
-    """Обновление данных пользователя"""
     return """
     UPDATE users 
     SET tg_nick = :tg_nick,
@@ -34,44 +31,36 @@ def update_user_sql() -> str:
 
 
 def select_user_by_tg_id_sql() -> str:
-    """Получить пользователя по Telegram ID"""
     return "SELECT * FROM users WHERE tg_id = :tg_id"
 
 
 def select_user_by_id_sql() -> str:
-    """Получить пользователя по ID"""
     return "SELECT * FROM users WHERE id = :id"
 
 
 def select_user_by_google_id_sql() -> str:
-    """Получить пользователя по Google ID"""
     return "SELECT * FROM users WHERE google_id = :google_id"
 
 
 def select_all_users_sql() -> str:
-    """Получить всех пользователей"""
     return "SELECT * FROM users ORDER BY created_at DESC"
 
 
 def delete_user_sql() -> str:
-    """Удалить пользователя по tg_id"""
     return "DELETE FROM users WHERE tg_id = :tg_id"
 
 
 def user_exists_by_tg_id_sql() -> str:
-    """Проверить существование пользователя по tg_id"""
     return "SELECT 1 FROM users WHERE tg_id = :tg_id LIMIT 1"
 
 
 def user_exists_by_google_id_sql() -> str:
-    """Проверить существование пользователя по google_id"""
     return "SELECT 1 FROM users WHERE google_id = :google_id LIMIT 1"
 
 
 # ==================== TOKENS TABLE ====================
 
 def create_tokens_table_sql() -> str:
-    """Создание таблицы токенов"""
     return """
     CREATE TABLE IF NOT EXISTS tokens (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -88,7 +77,6 @@ def create_tokens_table_sql() -> str:
 
 
 def insert_token_sql() -> str:
-    """Добавление нового токена"""
     return """
     INSERT INTO tokens (user_id, access_token, refresh_token, token_type, token_expiry )
     VALUES (:user_id, :access_token, :refresh_token, :token_type, :token_expiry )
@@ -96,7 +84,6 @@ def insert_token_sql() -> str:
 
 
 def update_token_sql() -> str:
-    """Обновление токена"""
     return """
     UPDATE tokens 
     SET access_token = :access_token,
@@ -109,12 +96,10 @@ def update_token_sql() -> str:
 
 
 def select_token_by_user_id_sql() -> str:
-    """Получить токен по user_id"""
     return "SELECT * FROM tokens WHERE user_id = :user_id"
 
 
 def select_token_by_tg_id_sql() -> str:
-    """Получить токен по Telegram ID (через JOIN)"""
     return """
     SELECT t.* 
     FROM tokens t
@@ -126,12 +111,10 @@ def select_token_by_tg_id_sql() -> str:
 
 
 def delete_token_by_user_id_sql() -> str:
-    """Удалить токен по user_id"""
     return "DELETE FROM tokens WHERE user_id = :user_id"
 
 
 def token_exists_sql() -> str:
-    """Проверить существование токена"""
     return "SELECT 1 FROM tokens WHERE user_id = :user_id LIMIT 1"
 
 

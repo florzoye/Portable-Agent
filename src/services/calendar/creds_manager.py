@@ -46,7 +46,7 @@ class CredentialsManager:
     async def get_service(self, user_id: int):
         token_data = await self.token_service.get_token(user_id)
         if not token_data:
-            raise ValueError("Credentials отсутствуют")
+            raise ValueError("Credentials missing")
 
         credentials = self.build_credentials(token_data)
 

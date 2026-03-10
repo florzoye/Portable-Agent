@@ -11,7 +11,7 @@ class ServiceException(AppException):
 
 
 class CalendarServiceException(ServiceException):
-    def __init__(self, message: str = "Ошибка Google Calendar сервиса", original_error: Exception = None):
+    def __init__(self, message: str = "Error Google Calendar services", original_error: Exception = None):
         super().__init__(
             message=message,
             original_error=original_error,
@@ -20,7 +20,7 @@ class CalendarServiceException(ServiceException):
 
 
 class CalendarAuthException(ServiceException):
-    def __init__(self, message: str = "Ошибка аутентификации Google Calendar", original_error: Exception = None):
+    def __init__(self, message: str = "Google Calendar Authentication Error", original_error: Exception = None):
         super().__init__(
             message=message,
             original_error=original_error,
@@ -29,7 +29,7 @@ class CalendarAuthException(ServiceException):
 
 
 class CalendarTokenException(ServiceException):
-    def __init__(self, message: str = "Ошибка с токеном Google Calendar", original_error: Exception = None):
+    def __init__(self, message: str = "Error with the Google Calendar token", original_error: Exception = None):
         super().__init__(
             message=message,
             original_error=original_error,

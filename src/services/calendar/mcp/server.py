@@ -11,18 +11,18 @@ mcp = FastMCP(name="Google Calendar", port=MCP_CALENDAR_PORT, host="0.0.0.0")
 
 @mcp.resource(
         'calendar://events/{tg_id}',
-        description="Получить предстоящие события пользователя из Google Calendar"
+        description="Get user's upcoming events from Google Calendar"
 )
 async def get_upcoming_events(tg_id: str) -> str:
     async with AsyncHTTPClient() as api:
         status, data = await api.get("/calendar/events", params={"tg_id": tg_id, "days_ahead": 7})
 
     if status != 200:
-        return f"❌ Ошибка получения событий: {status}"
+        return f"❌ Error receiving events: {status}"
 
     events = data.get("events", [])
     if not events:
-        return "Нет предстоящих событий"
+        return "There are no upcoming events"
 
     lines = []
     for e in events:
@@ -32,16 +32,16 @@ async def get_upcoming_events(tg_id: str) -> str:
 
 @mcp.resource(
         "calendar://user/{tg_id}", 
-        description="Получить информацию о пользователе и статус авторизации в Google Calendar"
+        description="Get user information and authorization status in Google Calendar"
 )
 async def get_user_info(tg_id: str) -> str:
     async with AsyncHTTPClient() as api:
         status, data = await api.get(f"/calendar/users/{tg_id}")
 
     if status == 404:
-        return "❌ Пользователь не найден"
+        return "❌ User not found"
     if status != 200:
-        return f"❌ Ошибка: {status}"
+        return f"❌ Error: {status}"
 
     return (
         f"tg_id: {data['tg_id']}\n"
@@ -53,7 +53,7 @@ async def get_user_info(tg_id: str) -> str:
 
 # TOOLS
 
-@mcp.tool(description="Получить предстоящие события пользователя из Google Calendar")
+@mcp.tool(description="Get user's upcoming events from Google Calendar")
 async def get_events(tg_id: int, days_ahead: int = 7) -> str:
     async with AsyncHTTPClient() as api:
         status, data = await api.get(
@@ -62,29 +62,29 @@ async def get_events(tg_id: int, days_ahead: int = 7) -> str:
         )
 
     if status == 401:
-        return "❌ Пользователь не авторизован в Google Calendar"
+        return "❌The user is not logged into Google Calendar"
     if status == 404:
-        return "❌ Пользователь не найден"
+        return "❌ The user was not found"
     if status != 200:
-        return f"❌ Ошибка сервера: {status}"
+        return f"❌ Server error: {status}"
 
     events = data.get("events", [])
     if not events:
-        return "📭 Нет предстоящих событий"
+        return "📭 There are no upcoming events"
 
-    lines = [f"📅 События на {days_ahead} дней:"]
+    lines = [f"📅 Сevents for {days_ahead} days:"]
     for e in events:
         lines.append(format_event(e))
     return "\n".join(lines)
 
 
-@mcp.tool(description="Найти события по тексту (название, описание, место)")
+@mcp.tool(description="Find events by text (name, description, location)")
 async def search_events(tg_id: int, query: str, days_ahead: int = 30) -> str:
     """
     Args:
-        tg_id: Telegram ID пользователя
-        query: Поисковый запрос
-        days_ahead: Глубина поиска в днях (по умолчанию 30)
+        tg_id: Telegram ID user
+        query:Search query
+        days_ahead: Search depth in days (default is 30)
     """
     async with AsyncHTTPClient() as api:
         status, data = await api.get(
@@ -93,20 +93,20 @@ async def search_events(tg_id: int, query: str, days_ahead: int = 30) -> str:
         )
 
     if status == 401:
-        return "❌ Пользователь не авторизован"
+        return "❌ The user is not logged in"
     if status != 200:
-        return f"❌ Ошибка сервера: {status}"
+        return f"❌ Server error: {status}"
 
     events = data.get("events", [])
     if not events:
-        return f"🔍 По запросу «{query}» ничего не найдено"
+        return f"🔍No results found for {query}"
 
-    lines = [f"🔍 Найдено событий по «{query}»: {len(events)}"]
+    lines = [f"🔍 Events found by «{query}»: {len(events)}"]
     for e in events:
         lines.append(format_event(e))
     return "\n".join(lines)
 
-@mcp.tool(description="Получить события за диапазон дат")
+@mcp.tool(description="Get events for a date range")
 async def get_events_range(tg_id: int, start: str, end: str) -> str:
     if "T" not in start:
         start = f"{start}T00:00:00Z"
@@ -126,30 +126,30 @@ async def get_events_range(tg_id: int, start: str, end: str) -> str:
         )
 
     if status == 401:
-        return "❌ Пользователь не авторизован в Google Calendar"
+        return "❌ The user is not authorized in Google Calendar"
 
     if status != 200:
-        return f"❌ Ошибка сервера ({status}): {data}"
+        return f"❌ Server error ({status}): {data}"
 
     if not isinstance(data, dict):
-        return f"❌ Некорректный ответ сервера: {data}"
+        return f"❌Incorrect server response: {data}"
 
     events = data.get("events", [])
     if not events:
-        return f"📭 Нет событий с {start} по {end}"
+        return f"📭Not Events with {start} to {end}"
 
-    lines = [f"📅 События с {start} по {end}: {len(events)} шт."]
+    lines = [f"📅 Events from {start} to {end}: {len(events)} events"]
     for e in events:
         lines.append(format_event(e))
     return "\n".join(lines)
 
 
-@mcp.tool(description="Получить подробную информацию о событии по его ID")
+@mcp.tool(description="Get detailed information about an event by its ID")
 async def get_event(tg_id: int, event_id: str) -> str:
     """
     Args:
-        tg_id: Telegram ID пользователя
-        event_id: ID события в Google Calendar
+        tg_id: Telegram ID user
+        event_id: ID event in Google Calendar
     """
     async with AsyncHTTPClient() as api:
         status, data = await api.get(
@@ -158,15 +158,15 @@ async def get_event(tg_id: int, event_id: str) -> str:
         )
 
     if status == 401:
-        return "❌ Пользователь не авторизован"
+        return "❌ User is not authorized"
     if status == 404:
-        return f"❌ Событие {event_id} не найдено"
+        return f"❌ Event {event_id} not found"
     if status != 200:
-        return f"❌ Ошибка сервера: {status}"
+        return f"❌ Server error: {status}"
 
     return format_event(data.get("event", {}))
 
-@mcp.tool(description="Получить события на конкретный день")
+@mcp.tool(description="Get events for a specific day")
 async def get_events_by_date(tg_id: int, date: str) -> str:
     payload = EventsRangeParams(
         user_id=tg_id,
@@ -181,24 +181,24 @@ async def get_events_by_date(tg_id: int, date: str) -> str:
         )
 
     if status == 401:
-        return "❌ Пользователь не авторизован в Google Calendar"
+        return "❌ The user is not authorized in Google Calendar"
 
     if status != 200:
-        return f"❌ Ошибка сервера ({status}): {data}"
+        return f"❌ Server error ({status}): {data}"
 
     if not isinstance(data, dict):
-        return f"❌ Некорректный ответ сервера: {data}"
+        return f"❌ Incorrect server response: {data}"
 
     events = data.get("events", [])
     if not events:
-        return f"📭 На {date} событий нет"
+        return f"📭 There are no events on {date}"
 
-    lines = [f"📅 События на {date}: {len(events)} шт."]
+    lines = [f"📅 Events on {date}: {len(events)} events"]
     for e in events:
         lines.append(format_event(e))
     return "\n".join(lines)
 
-@mcp.tool(description="Создать новое событие в Google Calendar")
+@mcp.tool(description="Create a new event in Google Calendar")
 async def create_event(
     tg_id: int,
     title: str,
@@ -211,14 +211,14 @@ async def create_event(
 ) -> str:
     """
     Args:
-        tg_id: Telegram ID пользователя
-        title: Название события
-        start_time: Начало в ISO формате (2025-03-15T10:00:00)
-        end_time: Конец в ISO формате (2025-03-15T11:00:00)
-        description: Описание события (опционально)
-        location: Место проведения (опционально)
-        attendees: Список email участников (опционально)
-        timezone: Часовой пояс (по умолчанию UTC)
+        tg_id: Telegram user ID
+        title: Event title
+        start_time: Start in ISO format (2025-03-15T10:00:00)
+        end_time: End in ISO format (2025-03-15T11:00:00)
+        description: Event description (optional)
+        location: Event location (optional)
+        attendees: List of attendees' emails (optional)
+        timezone: Time zone (default: UTC)
     """
     if attendees is None:
         attendees = []
@@ -241,13 +241,13 @@ async def create_event(
         )
 
     if status == 401:
-        return "❌ Пользователь не авторизован"
+        return "❌ The user is not logged in"
     if status != 200:
-        return f"❌ Ошибка сервера: {status} — {data}"
+        return f"❌ Server Error: {status} — {data}"
 
     return format_event(data.get("event", {}))
 
-@mcp.tool(description="Обновить существующее событие в Google Calendar")
+@mcp.tool(description="Update an existing event in Google Calendar")
 async def update_event(
     tg_id: int,
     event_id: str,
@@ -260,14 +260,14 @@ async def update_event(
 ) -> str:
     """
     Args:
-        tg_id: Telegram ID пользователя
-        event_id: ID события в Google Calendar
-        title: Новое название (опционально)
-        start_time: Новое время начала ISO (опционально)
-        end_time: Новое время конца ISO (опционально)
-        description: Новое описание (опционально)
-        location: Новое место (опционально)
-        timezone: Часовой пояс (по умолчанию UTC)
+        tg_id: Telegram user ID
+        event_id: Google Calendar event ID
+        title: New title (optional)
+        start_time: New start ISO time (optional)
+        end_time: New end ISO time (optional)
+        description: New description (optional)
+        location: New location (optional)
+        timezone: Time zone (default UTC)
     """
     payload = UpdateEventParams(
         user_id=tg_id,
@@ -286,16 +286,16 @@ async def update_event(
         )
 
     if status == 401:
-        return "❌ Пользователь не авторизован"
+        return "❌ The user is not logged in"
     if status == 404:
-        return f"❌ Событие {event_id} не найдено"
+        return f"❌ Event {event_id} not found"
     if status != 200:
-        return f"❌ Ошибка сервера: {status}"
+        return f"❌ Server error: {status}"
 
     return format_event(data.get("event", {}))
 
 
-@mcp.tool(description="Удалить событие из Google Calendar по его ID")
+@mcp.tool(description="Delete an event from Google Calendar by its ID")
 async def delete_event(tg_id: int, event_id: str) -> str:
     """
     Args:
@@ -309,20 +309,20 @@ async def delete_event(tg_id: int, event_id: str) -> str:
         )
 
     if status == 401:
-        return "❌ Пользователь не авторизован"
+        return "❌ The user is not logged in"
     if status == 404:
-        return f"❌ Событие {event_id} не найдено"
+        return f"❌ Event {event_id} not found"
     if status != 200:
-        return f"❌ Ошибка сервера: {status}"
+        return f"❌ Server error: {status}"
 
-    return f"Событие {event_id} удалено"
+    return f"Event {event_id} has been deleted"
 
 
-@mcp.tool(description="Получить ссылку для авторизации пользователя в Google Calendar")
+@mcp.tool(description="Get a link to authorize a user in Google Calendar")
 async def get_auth_url(tg_id: int) -> str:
     """
     Args:
-        tg_id: Telegram ID пользователя
+        tg_id: Telegram ID user
     """
     async with AsyncHTTPClient() as api:
         status, data = await api.get(
@@ -331,28 +331,28 @@ async def get_auth_url(tg_id: int) -> str:
         )
 
     if status != 200:
-        return f"❌ Не удалось получить ссылку: {status}"
+        return f"❌ Failed to retrieve the link: {status}"
 
-    return f"Ссылка для авторизации:\n{data.get('auth_url')}"
+    return f"Authorization link:\n{data.get('auth_url')}"
 
 
-@mcp.tool(description="Проверить, авторизован ли пользователь в Google Calendar")
+@mcp.tool(description="Check if the user is authorized in Google Calendar")
 async def check_auth(tg_id: int) -> str:
     """
     Args:
-        tg_id: Telegram ID пользователя
+        tg_id: Telegram ID user
     """
     async with AsyncHTTPClient() as api:
         status, data = await api.get(f"/calendar/users/{tg_id}")
 
-    if status == 404:
-        return "❌ Пользователь не найден"
+    if status == 401:
+        return "❌ The user is not logged in"
     if status != 200:
-        return f"❌ Ошибка сервера: {status}"
+        return f"❌ Server error: {status}"
 
     authorized = data.get("has_google_token", False)
     return (
-        f"{'Авторизован' if authorized else 'Не авторизован'}\n"
+        f"{'Authorized' if authorized else 'Not authorized'}\n"
         f"tg_id: {data['tg_id']}\n"
         f"nick: {data.get('tg_nick', '—')}"
     )

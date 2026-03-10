@@ -29,10 +29,10 @@ class TokensSQLite(GoogleTokensBase):
             await self.db.execute(create_tokens_table_sql())
             for index_sql in create_tokens_indexes_sql():  
                 await self.db.execute(index_sql)
-            self.logger.info("✅ Таблица tokens и индексы созданы")
+            self.logger.info("✅ The tokens table and indexes have been created")
             return True
         except Exception as e:
-            self.logger.error(f"❌ Ошибка при создании таблицы tokens: {e}")
+            self.logger.error(f"❌ Error when creating the table tokens: {e}")
             return False
 
     async def save_token(
@@ -58,14 +58,14 @@ class TokensSQLite(GoogleTokensBase):
 
             if exists:
                 await self.db.execute(update_token_sql(), params)
-                self.logger.info(f"✅ Токен обновлен для user_id={user_id}")
+                self.logger.info(f"✅ Token updated for user_id={user_id}")
             else:
                 await self.db.execute(insert_token_sql(), params)
-                self.logger.info(f"✅ Токен сохранен для user_id={user_id}")
+                self.logger.info(f"✅ Token save for user_id={user_id}")
 
             return True
         except Exception as e:
-            self.logger.error(f"❌ Ошибка при сохранении токена для user_id={user_id}: {e}", exc_info=True)
+            self.logger.error(f"❌ Error saving the token forя user_id={user_id}: {e}", exc_info=True)
             return False
 
     async def get_token(self, user_id: int) -> Optional[TokenModel]:
@@ -73,7 +73,7 @@ class TokensSQLite(GoogleTokensBase):
             row = await self.db.fetchone(select_token_by_user_id_sql(), {"user_id": user_id})
             return self._row_to_token(row) if row else None
         except Exception as e:
-            self.logger.error(f"❌ Ошибка при получении токена для user_id={user_id}: {e}")
+            self.logger.error(f"❌ Error when receiving a token for user_id={user_id}: {e}")
             return None
 
     async def get_token_by_tg_id(self, tg_id: int) -> Optional[TokenModel]:
@@ -81,7 +81,7 @@ class TokensSQLite(GoogleTokensBase):
             row = await self.db.fetchone(select_token_by_tg_id_sql(), {"tg_id": tg_id})
             return self._row_to_token(row) if row else None
         except Exception as e:
-            self.logger.error(f"❌ Ошибка при получении токена по tg_id={tg_id}: {e}")
+            self.logger.error(f"❌Error when receiving a token for по tg_id={tg_id}: {e}")
             return None
 
     async def update_token(
@@ -97,7 +97,7 @@ class TokensSQLite(GoogleTokensBase):
                 self.logger.warning(f"⚠️ Токен для user_id={user_id} не найден")
                 return False
 
-            # Обновляем только переданные поля, остальное берём из текущих данных
+            # We only update the passed fields, and take the rest from the current data
             await self.db.execute(update_token_sql(), {
                 "user_id": user_id,
                 "access_token": access_token if access_token is not None else current_token.access_token,
@@ -109,10 +109,10 @@ class TokensSQLite(GoogleTokensBase):
                 ),
                 "scopes": current_token.scopes
             })
-            self.logger.info(f"✅ Токен обновлен для user_id={user_id}")
+            self.logger.info(f"✅ Token updated for user_id={user_id}")
             return True
         except Exception as e:
-            self.logger.error(f"❌ Ошибка при обновлении токена для user_id={user_id}: {e}", exc_info=True)
+            self.logger.error(f"❌ Error updating the token for user_id={user_id}: {e}", exc_info=True)
             return False
 
     async def delete_token(self, user_id: int) -> bool:
@@ -121,7 +121,7 @@ class TokensSQLite(GoogleTokensBase):
             self.logger.info(f"✅ Токен удален для user_id={user_id}")
             return True
         except Exception as e:
-            self.logger.error(f"❌ Ошибка при удалении токена для user_id={user_id}: {e}")
+            self.logger.error(f"❌Error deleting the token for user_id={user_id}: {e}")
             return False
 
     async def token_exists(self, user_id: int) -> bool:
@@ -129,7 +129,7 @@ class TokensSQLite(GoogleTokensBase):
             row = await self.db.fetchone(token_exists_sql(), {"user_id": user_id})
             return row is not None
         except Exception as e:
-            self.logger.error(f"❌ Ошибка при проверке существования токена: {e}")
+            self.logger.error(f"❌ Error checking the existence of the token: {e}")
             return False
 
     async def delete_all_tables(self) -> bool:
@@ -138,7 +138,7 @@ class TokensSQLite(GoogleTokensBase):
             self.logger.info("✅ Таблица tokens удалена")
             return True
         except Exception as e:
-            self.logger.error(f"❌ Ошибка при удалении таблицы tokens: {e}")
+            self.logger.error(f"❌ Error deleting the tokens table: {e}")
             return False
 
     def _row_to_token(self, row: dict) -> TokenModel:
