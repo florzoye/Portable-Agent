@@ -1,3 +1,4 @@
+import re
 from typing import Any, Optional
 from datetime import timezone, datetime
 
@@ -55,14 +56,34 @@ class DataCreator:
 class DateTimeNormalizer:
     @staticmethod
     def normalize_expiry_for_db(expiry: Optional[datetime]) -> Optional[datetime]:
-        """aware → naive UTC перед сохранением в БД"""
+        """aware → naive UTC before saving to the database"""
         if expiry and expiry.tzinfo is not None:
             return expiry.replace(tzinfo=None)
         return expiry
 
     @staticmethod
     def normalize_expiry_from_db(expiry: Optional[datetime]) -> Optional[datetime]:
-        """naive → aware UTC при чтении из БД"""
+        """naive → aware UTC when reading from the database"""
         if expiry and expiry.tzinfo is None:
             return expiry.replace(tzinfo=timezone.utc)
         return expiry
+
+def _md_to_html(text: str) -> str:
+    text = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+    text = re.sub(
+        r"```(?:\w+)?\n?([\s\S]*?)```",
+        lambda m: f"<pre><code>{m.group(1).strip()}</code></pre>",
+        text,
+    )
+    text = re.sub(r"`([^`\n]+)`", r"<code>\1</code>", text)
+    text = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", text, flags=re.DOTALL)
+    text = re.sub(r"__(.+?)__", r"<b>\1</b>", text, flags=re.DOTALL)
+    text = re.sub(r"\*([^*\n]+)\*", r"<i>\1</i>", text)
+    text = re.sub(r"(?<!\w)_([^_\n]+)_(?!\w)", r"<i>\1</i>", text)
+    text = re.sub(r"~~(.+?)~~", r"<s>\1</s>", text)
+    text = re.sub(r"^#{1,3} (.+)$", r"<b>\1</b>", text, flags=re.MULTILINE)
+    text = re.sub(r"^[\-\*] (.+)$", r"• \1", text, flags=re.MULTILINE)
+    text = re.sub(r"^---+$", "─" * 20, text, flags=re.MULTILINE)
+
+    return text.strip()
