@@ -75,7 +75,16 @@ async def revoke_access(
 async def success_url():
     return await status("Calendar connected!")
 
-
+@router.get("/users/active")
+async def get_active_users(
+    users_repo: UsersBase = Depends(get_users_repo)
+):
+    try:
+        users = await users_repo.get_all_users()
+        return {"users": [{"tg_id": u.tg_id} for u in users]}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get users: {e}")
+    
 #  Users 
 
 @router.get("/users/{tg_id}", response_model=UserResponse)
