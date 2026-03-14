@@ -10,6 +10,8 @@ class CreateEventRequest(BaseModel):
     end_time: datetime = Field(..., example="2026-02-20T11:00:00+00:00")
     description: Optional[str] = Field(None, example="Discussion of the project")
     location: Optional[str] = Field(None, example="Zoom")
+    timezone: str = Field("UTC", example="Asia/Krasnoyarsk") 
+    attendees: Optional[list[str]] = Field(None) 
 
 class EventDateTime(BaseModel):
     day: Optional[date] = Field(None, alias="date")
