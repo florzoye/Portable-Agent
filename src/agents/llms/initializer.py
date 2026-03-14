@@ -11,6 +11,7 @@ class LLMInitializer:
     _initialized: bool = False
     _llm_instances: List[BaseChatModel] = []
     _wrappers: List[BaseLLM] = []
+    _selected: BaseChatModel | None = None  
 
     @classmethod
     def _load_modules(cls, path: str = "src/agents/llms"):
@@ -30,6 +31,18 @@ class LLMInitializer:
     def _get_llm_classes(cls) -> List[Type[BaseLLM]]:
         return BaseLLM.__subclasses__()
 
+    @classmethod
+    def set_selected(cls, llm: BaseChatModel):
+        cls._selected = llm
+    
+    @classmethod
+    def get_selected(cls) -> BaseChatModel:
+        if cls._selected is None:
+            if not cls._llm_instances:
+                raise RuntimeError("LLM is not initialized")
+            return cls._llm_instances[0]  # fallback
+        return cls._selected
+        
     @classmethod
     async def initialize(cls) -> List[BaseChatModel]:
         if cls._initialized:
