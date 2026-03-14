@@ -69,7 +69,6 @@ class ConfigRegistry(metaclass=SingletonLockMeta):
 
         settings = RedisSettings()
         redis_url = f"redis://:{settings.REDIS_PASSWORD}@{settings.REDIS_HOST}:{settings.REDIS_PORT}/0"
-        print(redis_url)
 
         self._celery_app = Celery("celery_worker", broker=redis_url, backend=redis_url)
         self._celery_app.conf.update(
