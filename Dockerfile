@@ -6,7 +6,9 @@ ENV PYTHONUNBUFFERED=1 \
     UV_COMPILE_BYTECODE=1 \
     PYTHONPATH=/app \
     PATH="/app/.venv/bin:$PATH"
-    
+
+RUN apt-get update && apt-get install -y tzdata && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 COPY pyproject.toml uv.lock ./
