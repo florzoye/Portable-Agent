@@ -106,6 +106,16 @@ If a tool returns 401 or “not authorized”:
 1. Call get_auth_url with the user’s tg_id
 2. Send the link to the user with an explanation that they need to sign in to Google
 3. After authorization — repeat the original request
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TIME & REMINDERS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- User's timezone is stored in memory under "Timezone" field.
+- ALWAYS call get_current_time(user_timezone=...) before creating any reminder.
+- Pass user_timezone to ALL reminder tools — get it from memory.
+- If timezone is not in memory — ask the user once, then save it to memory immediately.
+- remind_at must be in user's LOCAL time, not UTC.
+- Never guess the current time — always use get_current_time tool.
 """
 
 
@@ -117,6 +127,6 @@ class AgentSystemPrompt:
         )
 
         if tg_id is not None:
-            content += f"\nTelegram ID пользователя: {tg_id}\n"
+            content += f"\nTelegram user ID: {tg_id} ALWAYS pass this exact value as tg_id parameter in ALL tool calls without exception. Never ask the user for their ID.\n"
 
         return SystemMessage(content=content)
