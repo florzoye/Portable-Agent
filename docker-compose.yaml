@@ -90,6 +90,32 @@ services:
       retries: 10
       start_period: 10s
 
+  mcp-reminders:
+    build: .
+    command: uv run python -m src.services.reminders.mcp.run  
+    ports:
+      - "8003:8003"
+    env_file: .env
+    environment:
+      MCP_REMINDERS_HOST: ${MCP_REMINDERS_HOST:-mcp-reminders}
+      MCP_REMINDERS_PORT: ${MCP_REMINDERS_PORT:-8003}
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+            
+    networks:
+      - app-net
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8003/sse')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
   telegram-bot:
     build: .
     command: uv run python -m src.services.telegram.bot.main
@@ -97,11 +123,65 @@ services:
     environment:
       MCP_CALENDAR_HOST: mcp-calendar
       MCP_CALENDAR_PORT: 8002
+      MCP_REMINDERS_HOST: mcp-reminders  
+      MCP_REMINDERS_PORT: 8003           
     volumes:
       - agent-storage:/storage  
     networks:
       - app-net
     depends_on:
       mcp-calendar:
+        condition: service_healthy
+      mcp-reminders: 
+        condition: service_healthy
+    restart: unless-stopped
+
+  celery-worker:
+    build: .
+    command: uv run celery -A src.tasks.celery_app worker --loglevel=info --concurrency=2 -E
+    env_file: .env
+    environment:
+      MCP_CALENDAR_HOST: mcp-calendar
+      MCP_CALENDAR_PORT: 8002
+      MCP_REMINDERS_HOST: mcp-reminders  
+      MCP_REMINDERS_PORT: 8003            
+      FASTAPI_CALENDAR_HOST: fastapi-calendar
+      FASTAPI_CALENDAR_PORT: 8001
+    volumes:
+      - agent-storage:/storage
+    networks:
+      - app-net
+    depends_on:
+      redis:
+        condition: service_healthy
+      mcp-calendar:
+        condition: service_healthy
+    restart: unless-stopped
+
+  celery-beat:
+    build: .
+    command: uv run celery -A src.tasks.celery_app beat --loglevel=info --scheduler celery.beat.PersistentScheduler
+    env_file: .env
+    environment:
+      FASTAPI_CALENDAR_HOST: fastapi-calendar
+      FASTAPI_CALENDAR_PORT: 8001
+    networks:
+      - app-net
+    depends_on:
+      redis:
+        condition: service_healthy
+      celery-worker:
+        condition: service_started
+    restart: unless-stopped
+
+  flower:
+    image: mher/flower
+    command: celery --broker=redis://:${REDIS_PASSWORD}@redis:6379/0 flower --port=5555
+    ports:
+      - "5555:5555"
+    networks:
+      - app-net
+    depends_on:
+      redis:
         condition: service_healthy
     restart: unless-stopped
