@@ -12,19 +12,32 @@ _reminders_tools: list[BaseTool] = []
 
 async def init_reminders_client() -> None:
     global _exit_stack, _reminders_tools
+
+    if _exit_stack is not None:
+        return
+
     logger.info(f"Connecting to MCP Reminders: {MCP_REMINDERS_URL}")
-    _exit_stack = AsyncExitStack()
-    read, write = await _exit_stack.enter_async_context(sse_client(MCP_REMINDERS_URL))
-    session = await _exit_stack.enter_async_context(ClientSession(read, write))
+
+    stack = AsyncExitStack()
+    read, write = await stack.enter_async_context(sse_client(MCP_REMINDERS_URL))
+    session = await stack.enter_async_context(ClientSession(read, write))
     await session.initialize()
+
     _reminders_tools = await load_mcp_tools(session)
+    _exit_stack = stack
 
 
 async def close_reminders_client() -> None:
-    global _exit_stack
+    global _exit_stack, _reminders_tools
+
     if _exit_stack:
-        await _exit_stack.aclose()
-        _exit_stack = None
+        try:
+            await _exit_stack.aclose()
+        except Exception as e:
+            logger.exception(f"Error while closing reminders client: {e}")
+        finally:
+            _exit_stack = None
+            _reminders_tools = []
 
 
 async def get_reminders_tools() -> list[BaseTool]:
