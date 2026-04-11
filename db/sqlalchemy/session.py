@@ -1,5 +1,5 @@
+from src.enum import DatabaseType
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-
 
 class SQLAlchemyManager:
     def __init__(self):
@@ -11,23 +11,23 @@ class SQLAlchemyManager:
             return
 
         from data import get_config
-        cfg = get_config().DB_CONFIG  
+        cfg = get_config().DB_CONFIG
 
-        self.engine = create_async_engine(
-            cfg.url,
-            echo=cfg.DB_DEBUG,
-            pool_pre_ping=True,
-            pool_size=5,
-            max_overflow=10,
-        )
+        engine_kwargs = {
+            "echo": cfg.DB_DEBUG,
+            "pool_pre_ping": True,
+        }
 
+        if cfg.DB_TYPE != DatabaseType.SQLITE:
+            engine_kwargs["pool_size"] = 5
+            engine_kwargs["max_overflow"] = 10
+
+        self.engine = create_async_engine(cfg.url, **engine_kwargs)
         self.session_maker = async_sessionmaker(
             self.engine,
             class_=AsyncSession,
             expire_on_commit=False,
         )
-
-        print("✅ SQLAlchemy engine initialized")
         
     def get_session(self) -> AsyncSession:
         if self.session_maker is None:

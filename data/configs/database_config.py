@@ -16,6 +16,8 @@ class DBConfig(BaseConfig):
     
     @property
     def url(self) -> str:
+        if self.DB_TYPE == "sqlite":
+            return f"sqlite+aiosqlite:///{self.SQLITE_PATH}"
         return (
             f"postgresql+asyncpg://{self.DB_USER}:{self.DB_PASSWORD}"
             f"@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
