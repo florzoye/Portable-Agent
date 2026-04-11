@@ -1,0 +1,40 @@
+services:
+  telegram-bot:
+    build: .
+    command: uv run python -m src.services.telegram.bot.main
+    env_file: .env
+    environment:
+      MCP_CALENDAR_HOST: mcp-calendar
+      MCP_CALENDAR_PORT: 8002
+      MCP_REMINDERS_HOST: mcp-reminders
+      MCP_REMINDERS_PORT: 8003
+    volumes:
+      - agent-storage:/storage
+    networks:
+      - app-net
+    depends_on:
+      mcp-calendar:
+        condition: service_healthy
+      mcp-reminders:
+        condition: service_healthy
+    restart: unless-stopped
+
+  web-assistant:
+    build: .
+    command: uv run python -m src.services.web.main
+    env_file: .env
+    environment:
+      MCP_CALENDAR_HOST: mcp-calendar
+      MCP_CALENDAR_PORT: 8002
+      MCP_REMINDERS_HOST: mcp-reminders
+      MCP_REMINDERS_PORT: 8003
+    volumes:
+      - agent-storage:/storage
+    networks:
+      - app-net
+    depends_on:
+      mcp-calendar:
+        condition: service_healthy
+      mcp-reminders:
+        condition: service_healthy
+    restart: unless-stopped

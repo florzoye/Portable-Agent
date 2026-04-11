@@ -1,0 +1,40 @@
+version: "3.9"
+
+services:
+  celery-worker:
+    build: .
+    command: uv run celery -A src.tasks.celery_app worker --loglevel=info --concurrency=2 -E
+    env_file: .env
+    environment:
+      MCP_CALENDAR_HOST: mcp-calendar
+      MCP_CALENDAR_PORT: 8002
+      MCP_REMINDERS_HOST: mcp-reminders
+      MCP_REMINDERS_PORT: 8003
+      FASTAPI_CALENDAR_HOST: fastapi-calendar
+      FASTAPI_CALENDAR_PORT: 8001
+    volumes:
+      - agent-storage:/storage
+    networks:
+      - app-net
+    depends_on:
+      redis:
+        condition: service_healthy
+      mcp-calendar:
+        condition: service_healthy
+    restart: unless-stopped
+
+  celery-beat:
+    build: .
+    command: uv run celery -A src.tasks.celery_app beat --loglevel=info --scheduler celery.beat.PersistentScheduler
+    env_file: .env
+    environment:
+      FASTAPI_CALENDAR_HOST: fastapi-calendar
+      FASTAPI_CALENDAR_PORT: 8001
+    networks:
+      - app-net
+    depends_on:
+      redis:
+        condition: service_healthy
+      celery-worker:
+        condition: service_started
+    restart: unless-stopped

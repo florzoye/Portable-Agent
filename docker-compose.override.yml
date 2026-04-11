@@ -1,0 +1,20 @@
+services:
+  fastapi-calendar:
+    ports:
+      - "8001:8001"
+
+  mcp-calendar:
+    ports:
+      - "8002:8002"
+
+  mcp-reminders:
+    ports:
+      - "8003:8003"
+
+  flower:
+    ports:
+      - "5555:5555"
+
+  web-assistant:
+    ports:
+      - "8080:8000"

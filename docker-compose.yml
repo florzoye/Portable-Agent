@@ -1,0 +1,48 @@
+networks:
+  app-net:
+    driver: bridge
+
+volumes:
+  sqlite-data:
+  agent-storage:
+  postgres-data:
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - app-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    networks:
+      - app-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  flower:
+    image: mher/flower
+    command: celery --broker=redis://:${REDIS_PASSWORD}@redis:6379/0 flower --port=5555
+    networks:
+      - app-net
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped

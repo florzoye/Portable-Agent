@@ -1,0 +1,69 @@
+services:
+  fastapi-calendar:
+    build: .
+    command: uv run python -m src.services.calendar.server.run
+    env_file: .env
+    environment:
+      FASTAPI_CALENDAR_PORT: 8001
+      FASTAPI_CALENDAR_HOST: fastapi-calendar
+      GOOGLE_CALENDAR_REDIRECT_URI: "http://localhost:8001/calendar/oauth/callback"
+    volumes:
+      - sqlite-data:/app/data/db
+    networks:
+      - app-net
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  mcp-calendar:
+    build: .
+    command: uv run python -m src.services.calendar.mcp.run
+    env_file: .env
+    environment:
+      MCP_CALENDAR_PORT: 8002
+      FASTAPI_CALENDAR_HOST: fastapi-calendar
+      FASTAPI_CALENDAR_PORT: 8001
+    networks:
+      - app-net
+    depends_on:
+      fastapi-calendar:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8002/sse')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  mcp-reminders:
+    build: .
+    command: uv run python -m src.services.reminders.mcp.run
+    env_file: .env
+    environment:
+      MCP_REMINDERS_HOST: ${MCP_REMINDERS_HOST:-mcp-reminders}
+      MCP_REMINDERS_PORT: ${MCP_REMINDERS_PORT:-8003}
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    networks:
+      - app-net
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8003/sse')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
