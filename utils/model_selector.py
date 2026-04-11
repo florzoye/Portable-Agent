@@ -15,10 +15,10 @@ def _model_label(llm: BaseChatModel, wrapper: BaseLLM) -> str:
         or getattr(llm, "model_name", None)
         or type(llm).__name__
     )
-    return f"{model_name}  ({type(wrapper).__name__})"
+    return f"{model_name} ({type(wrapper).__name__})"
 
 
-def select_model(
+async def select_model(
     wrappers: list[BaseLLM],
     llms: list[BaseChatModel],
 ) -> BaseChatModel:
@@ -36,17 +36,17 @@ def select_model(
         for wrapper, llm in zip(wrappers, llms)
     }
 
-    answer = questionary.select(
+    answer = await questionary.select(
         "Choose a model:",
         choices=list(choices.keys()),
         style=questionary.Style([
-            ("selected",    "fg:green bold"),
-            ("pointer",     "fg:green bold"),
+            ("selected", "fg:green bold"),
+            ("pointer", "fg:green bold"),
             ("highlighted", "fg:green"),
-            ("question",    "bold"),
-            ("answer",      "fg:green bold"),
+            ("question", "bold"),
+            ("answer", "fg:green bold"),
         ]),
-    ).unsafe_ask()
+    ).unsafe_ask_async()
 
     if answer is None:
         raise KeyboardInterrupt
