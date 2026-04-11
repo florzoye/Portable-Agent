@@ -25,15 +25,36 @@ def init_telegram_sender(bot: Bot) -> None:
 
 
 async def on_startup():
-    await get_tools()  
-    await LLMInitializer.initialize()
-    await get_checkpointer()
+    try:
+        await get_tools()  
+    except Exception:
+        logger.exception("Failed to initialize tools")
+    try:
+        await LLMInitializer.initialize()
+    except Exception:
+        logger.exception("Failed to initialize LLM")
+    try:
+        await get_checkpointer()
+    except Exception:
+        logger.exception("Failed to initialize checkpointer")
     logger.info("🤖 Assistant started")
 
 async def on_shutdown():
-    await close_calendar_client()
-    await close_reminders_client()
-    await close_checkpointer()
+    try:
+        await close_calendar_client()
+    except Exception:
+        logger.exception("Failed to close calendar client")
+
+    try:
+        await close_reminders_client()
+    except Exception:
+        logger.exception("Failed to close reminders client")
+
+    try:
+        await close_checkpointer()
+    except Exception:
+        logger.exception("Failed to close checkpointer")
+
     logger.info("🤖 Assistant stopped")
 
 async def _send_html(message: Message, text: str) -> None:
