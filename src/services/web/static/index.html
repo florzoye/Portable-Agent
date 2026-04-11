@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Assistant</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #0f0f0f;
+    color: #e8e8e8;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  header {
+    padding: 14px 20px;
+    border-bottom: 1px solid #222;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: #141414;
+  }
+
+  header .dot {
+    width: 9px; height: 9px;
+    border-radius: 50%;
+    background: #3c3c3c;
+    transition: background 0.3s;
+  }
+  header .dot.connected { background: #4caf50; }
+
+  header h1 { font-size: 15px; font-weight: 600; color: #ddd; }
+  header .session { font-size: 12px; color: #555; margin-left: auto; font-family: monospace; }
+
+  #messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    scroll-behavior: smooth;
+  }
+
+  #messages::-webkit-scrollbar { width: 6px; }
+  #messages::-webkit-scrollbar-track { background: transparent; }
+  #messages::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 3px; }
+
+  .msg-wrap {
+    display: flex;
+    padding: 0 20px;
+    animation: fadein 0.15s ease;
+  }
+  @keyframes fadein { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; } }
+
+  .msg-wrap.user { justify-content: flex-end; }
+  .msg-wrap.assistant { justify-content: flex-start; }
+
+  .bubble {
+    max-width: 72%;
+    padding: 10px 14px;
+    border-radius: 14px;
+    font-size: 14px;
+    line-height: 1.6;
+    word-break: break-word;
+  }
+
+  .msg-wrap.user .bubble {
+    background: #1e3a5f;
+    color: #cde;
+    border-bottom-right-radius: 4px;
+  }
+
+  .msg-wrap.assistant .bubble {
+    background: #1c1c1c;
+    color: #e0e0e0;
+    border-bottom-left-radius: 4px;
+    border: 1px solid #2a2a2a;
+  }
+
+  .bubble.error { background: #2a1515; border-color: #5a2020; color: #e08080; }
+
+  /* Rendered HTML content */
+  .bubble b, .bubble strong { color: #fff; }
+  .bubble a { color: #5b9bd5; }
+  .bubble code {
+    background: #252525;
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-size: 13px;
+    font-family: "SF Mono", Consolas, monospace;
+  }
+  .bubble pre {
+    background: #1a1a1a;
+    border: 1px solid #2e2e2e;
+    border-radius: 8px;
+    padding: 12px;
+    overflow-x: auto;
+    margin: 8px 0;
+  }
+  .bubble pre code { background: none; padding: 0; }
+  .bubble ul, .bubble ol { padding-left: 18px; margin: 6px 0; }
+  .bubble li { margin: 2px 0; }
+  .bubble p { margin: 4px 0; }
+  .bubble blockquote {
+    border-left: 3px solid #444;
+    padding-left: 10px;
+    color: #999;
+    margin: 6px 0;
+  }
+
+  /* Typing indicator */
+  .typing .bubble {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 12px 16px;
+  }
+  .typing .dot-pulse { display: flex; gap: 4px; }
+  .typing .dot-pulse span {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: #555;
+    animation: pulse 1.2s infinite;
+  }
+  .typing .dot-pulse span:nth-child(2) { animation-delay: 0.2s; }
+  .typing .dot-pulse span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes pulse { 0%,80%,100% { opacity: 0.3; transform: scale(0.8); } 40% { opacity: 1; transform: scale(1); } }
+
+  #empty-state {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #444;
+    gap: 8px;
+    pointer-events: none;
+  }
+  #empty-state svg { opacity: 0.3; }
+  #empty-state p { font-size: 14px; }
+
+  footer {
+    padding: 12px 20px 16px;
+    border-top: 1px solid #1e1e1e;
+    background: #141414;
+  }
+
+  #input-row {
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+    background: #1c1c1c;
+    border: 1px solid #2a2a2a;
+    border-radius: 12px;
+    padding: 8px 10px;
+    transition: border-color 0.2s;
+  }
+  #input-row:focus-within { border-color: #3a3a3a; }
+
+  #input {
+    flex: 1;
+    background: none;
+    border: none;
+    outline: none;
+    color: #e0e0e0;
+    font-size: 14px;
+    line-height: 1.5;
+    resize: none;
+    max-height: 120px;
+    font-family: inherit;
+    overflow-y: auto;
+  }
+  #input::placeholder { color: #444; }
+
+  #send-btn {
+    background: #1e3a5f;
+    border: none;
+    border-radius: 8px;
+    width: 34px; height: 34px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    color: #7ab3e0;
+    transition: background 0.2s, color 0.2s;
+    flex-shrink: 0;
+  }
+  #send-btn:hover:not(:disabled) { background: #254d7a; color: #acd; }
+  #send-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+  .hint { font-size: 11px; color: #3a3a3a; text-align: center; margin-top: 6px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="dot" id="status-dot"></div>
+  <h1>AI Assistant</h1>
+  <span class="session" id="session-label"></span>
+</header>
+
+<div id="messages">
+  <div id="empty-state">
+    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+    </svg>
+    <p>Send a message to start</p>
+  </div>
+</div>
+
+<footer>
+  <div id="input-row">
+    <textarea id="input" rows="1" placeholder="Type a message…" disabled></textarea>
+    <button id="send-btn" disabled title="Send">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+      </svg>
+    </button>
+  </div>
+  <p class="hint">Enter to send · Shift+Enter for new line</p>
+</footer>
+
+<script>
+  // --- Session ID ---
+  function getOrCreateSession() {
+    let id = sessionStorage.getItem("chat_session");
+    if (!id) {
+      id = "web-" + Math.random().toString(36).slice(2, 10);
+      sessionStorage.setItem("chat_session", id);
+    }
+    return id;
+  }
+
+  const SESSION_ID = getOrCreateSession();
+  document.getElementById("session-label").textContent = SESSION_ID;
+
+  // --- DOM refs ---
+  const messagesEl = document.getElementById("messages");
+  const emptyState = document.getElementById("empty-state");
+  const inputEl = document.getElementById("input");
+  const sendBtn = document.getElementById("send-btn");
+  const statusDot = document.getElementById("status-dot");
+
+  // --- WebSocket ---
+  let ws;
+  let isWaiting = false;
+
+  function connect() {
+    const proto = location.protocol === "https:" ? "wss" : "ws";
+    ws = new WebSocket(`${proto}://${location.host}/ws/${SESSION_ID}`);
+
+    ws.onopen = () => {
+      statusDot.classList.add("connected");
+      inputEl.disabled = false;
+      sendBtn.disabled = false;
+      inputEl.focus();
+    };
+
+    ws.onclose = () => {
+      statusDot.classList.remove("connected");
+      inputEl.disabled = true;
+      sendBtn.disabled = true;
+      // Reconnect after 2s
+      setTimeout(connect, 2000);
+    };
+
+    ws.onerror = () => ws.close();
+
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      removeTyping();
+      isWaiting = false;
+      sendBtn.disabled = false;
+
+      if (data.type === "message") {
+        appendBubble("assistant", data.content, false);
+      } else if (data.type === "error") {
+        appendBubble("assistant", data.content, true);
+      }
+    };
+  }
+
+  // --- Messages ---
+  function appendBubble(role, html, isError = false) {
+    emptyState.style.display = "none";
+
+    const wrap = document.createElement("div");
+    wrap.className = `msg-wrap ${role}`;
+
+    const bubble = document.createElement("div");
+    bubble.className = "bubble" + (isError ? " error" : "");
+
+    if (role === "user") {
+      bubble.textContent = html; // plain text for user
+    } else {
+      bubble.innerHTML = html;   // HTML for assistant (already sanitized server-side)
+    }
+
+    wrap.appendChild(bubble);
+    messagesEl.appendChild(wrap);
+    scrollToBottom();
+  }
+
+  function showTyping() {
+    const wrap = document.createElement("div");
+    wrap.className = "msg-wrap assistant typing";
+    wrap.id = "typing-indicator";
+    wrap.innerHTML = `<div class="bubble"><div class="dot-pulse"><span></span><span></span><span></span></div></div>`;
+    messagesEl.appendChild(wrap);
+    scrollToBottom();
+  }
+
+  function removeTyping() {
+    document.getElementById("typing-indicator")?.remove();
+  }
+
+  function scrollToBottom() {
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+
+  // --- Send ---
+  function sendMessage() {
+    const text = inputEl.value.trim();
+    if (!text || isWaiting || ws.readyState !== WebSocket.OPEN) return;
+
+    appendBubble("user", text);
+    ws.send(text);
+
+    inputEl.value = "";
+    inputEl.style.height = "auto";
+    isWaiting = true;
+    sendBtn.disabled = true;
+    showTyping();
+  }
+
+  sendBtn.addEventListener("click", sendMessage);
+
+  inputEl.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  });
+
+  // Auto-grow textarea
+  inputEl.addEventListener("input", () => {
+    inputEl.style.height = "auto";
+    inputEl.style.height = Math.min(inputEl.scrollHeight, 120) + "px";
+  });
+
+  connect();
+</script>
+</body>
+</html>
