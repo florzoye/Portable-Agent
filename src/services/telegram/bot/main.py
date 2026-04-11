@@ -49,7 +49,7 @@ if __name__ == "__main__":
 
         async def _main():
             wrappers, llms = await _init_llms()
-            selected = select_model(wrappers, llms)
+            selected = await select_model(wrappers, llms)
             LLMInitializer.set_selected(selected)
             await _run_bot()
 
