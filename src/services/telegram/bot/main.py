@@ -1,7 +1,9 @@
 import asyncio
+import sys
 from loguru import logger
 from aiogram import Bot, Dispatcher
 from langchain_core.language_models import BaseChatModel
+from aiogram.exceptions import TelegramNetworkError, TelegramAPIError
 
 from src.services.telegram.bot.handlers import (
     register_handlers,
@@ -9,9 +11,9 @@ from src.services.telegram.bot.handlers import (
     on_startup,
     on_shutdown,
 )
-from src.agents.llms.initializer import LLMInitializer
-from utils.model_selector import select_model
 from data import init, get_config
+from utils.model_selector import select_model
+from src.agents.llms.initializer import LLMInitializer
 
 selected_llm: BaseChatModel | None = None
 
@@ -43,17 +45,35 @@ async def _run_bot():
     await dp.start_polling(bot)
 
 
+async def _main():
+    try:
+        wrappers, llms = await _init_llms()
+        selected = await select_model(wrappers, llms)
+        LLMInitializer.set_selected(selected)
+    except Exception as e:
+        logger.error(f"❌ Failed to initialize LLM: {e}")
+        sys.exit(1)
+
+    try:
+        await _run_bot()
+    except TelegramNetworkError as e:
+        logger.error(
+            "❌ Cannot connect to Telegram API.\n"
+            "   Check your network or configure a proxy.\n"
+            f"   Reason: {e}"
+        )
+        sys.exit(1)
+    except TelegramAPIError as e:
+        logger.error(f"❌ Telegram API error: {e}")
+        sys.exit(1)
+    except Exception as e:
+        logger.exception(f"❌ Unexpected error: {e}")
+        sys.exit(1)
+
+
 if __name__ == "__main__":
     try:
         init()
-
-        async def _main():
-            wrappers, llms = await _init_llms()
-            selected = await select_model(wrappers, llms)
-            LLMInitializer.set_selected(selected)
-            await _run_bot()
-
         asyncio.run(_main())
-
     except KeyboardInterrupt:
-        pass
+        logger.info("👋 Bot stopped by user")
