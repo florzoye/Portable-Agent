@@ -1,6 +1,6 @@
 # 🤖 PortableAgent
 
-A modular AI-powered Telegram bot with Google Calendar integration, LangGraph agents, persistent memory, and Celery-based reminders and follow-ups.
+A modular AI-powered assistant with Google Calendar integration, LangGraph agents, persistent memory, and Celery-based reminders and follow-ups. Accessible via **Telegram bot** and a **Web UI**.
 
 ---
 
@@ -11,53 +11,64 @@ A modular AI-powered Telegram bot with Google Calendar integration, LangGraph ag
 - ⏰ **Reminder & task management** — schedule reminders and follow-ups through MCP tools
 - 🧠 **User-specific memory** — persistent conversation history across sessions (PostgreSQL)
 - 💬 **Telegram Chat Bot interface** — powered by aiogram + LangGraph ReAct agent
-- 🐳 **Dockerized deployment** — easy self-hosting with a single `docker compose up`
+- 🖥️ **Web Chat UI** — browser-based chat interface with WebSocket streaming (FastAPI + uvicorn)
+- 🐳 **Dockerized deployment** — modular compose files, easy self-hosting
 
 ### Upcoming / In Planning
 - 🔍 **Hybrid RAG** (dense + sparse) for smart retrieval
 - 📈 **Quant/Trading sub-agent**
 - 🎯 **Polymarket API integration** (prediction markets)
 - 📊 **Lifetime activity tracker**
-- 🖥️ **Custom chatbot UI**
 - 🐙 **GitHub commit/activity tracker**
 
 ---
 
-##  Architecture
+## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                     Telegram Bot                        │
-│              (aiogram + LangGraph agent)                │
-└────────────┬───────────────────────┬────────────────────┘
-             │                       │
-     ┌───────▼──────┐       ┌────────▼─────────┐
-     │  MCP Calendar │       │  MCP Reminders   │
-     │   (port 8002) │       │   (port 8003)    │
-     └───────┬───────┘       └────────┬─────────┘
-             │                        │
-     ┌───────▼───────┐       ┌────────▼─────────┐
-     │FastAPI Calendar│       │  Celery Worker   │
-     │   (port 8001) │       │  + Celery Beat   │
-     └───────┬───────┘       └────────┬─────────┘
-             │                        │
-     ┌───────▼────────────────────────▼─────────┐
-     │           PostgreSQL + Redis              │
-     └───────────────────────────────────────────┘
+┌──────────────────────┐    ┌──────────────────────┐
+│    Telegram Bot      │    │    Web Assistant      │
+│  (aiogram + agent)   │    │  (FastAPI + WS + UI)  │
+└────────┬─────────────┘    └──────────┬────────────┘
+         │                             │
+         └──────────────┬──────────────┘
+                        │
+           ┌────────────▼────────────┐
+           │     LangGraph Agent     │
+           │   (ReAct + MCP tools)   │
+           └──────┬──────────┬───────┘
+                  │          │
+     ┌────────────▼──┐  ┌────▼─────────────┐
+     │  MCP Calendar │  │  MCP Reminders   │
+     │  (port 8002)  │  │  (port 8003)     │
+     └───────┬───────┘  └────────┬─────────┘
+             │                   │
+     ┌───────▼───────┐  ┌────────▼─────────┐
+     │FastAPI Calendar│  │  Celery Worker   │
+     │  (port 8001)  │  │  + Celery Beat   │
+     └───────┬───────┘  └────────┬─────────┘
+             │                   │
+     ┌───────▼───────────────────▼──────────┐
+     │         PostgreSQL + Redis            │
+     └───────────────────────────────────────┘
 ```
 
 ### Services
 
-| Service | Port | Description |
-|---|---|---|
-| `fastapi-calendar` | 8001 | Google Calendar REST API |
-| `mcp-calendar` | 8002 | MCP server wrapping Calendar API via SSE |
-| `mcp-reminders` | 8003 | MCP server for scheduling reminders and follow-ups |
-| `telegram-bot` | — | aiogram bot with LangGraph agent |
-| `celery-worker` | — | Async task execution |
-| `celery-beat` | — | Periodic task scheduling |
-| `postgres` | 5432 | Persistent storage + LangGraph checkpoints |
-| `redis` | 6379 | Celery broker and result backend |
+| Service | Host port (dev) | Container port | Description |
+|---|---|---|---|
+| `fastapi-calendar` | 8001 | 8001 | Google Calendar REST API |
+| `mcp-calendar` | 8002 | 8002 | MCP server wrapping Calendar API via SSE |
+| `mcp-reminders` | 8003 | 8003 | MCP server for scheduling reminders and follow-ups |
+| `telegram-bot` | — | — | aiogram bot with LangGraph agent |
+| `web-assistant` | 8080 | 8000 | Browser-based chat UI with WebSocket |
+| `celery-worker` | — | — | Async task execution |
+| `celery-beat` | — | — | Periodic task scheduling |
+| `flower` | 5555 | 5555 | Celery monitoring UI |
+| `postgres` | — | 5432 | Persistent storage + LangGraph checkpoints |
+| `redis` | — | 6379 | Celery broker and result backend |
+
+> Host ports are only exposed in dev mode (via `docker-compose.override.yml`).
 
 ---
 
@@ -66,6 +77,7 @@ A modular AI-powered Telegram bot with Google Calendar integration, LangGraph ag
 ### Prerequisites
 
 - Docker & Docker Compose
+- `make` (optional but recommended)
 - A Telegram bot token (from [@BotFather](https://t.me/BotFather))
 - Google OAuth 2.0 credentials
 - Ollama running locally (or an OpenAI API key)
@@ -83,12 +95,78 @@ Edit `.env` with your credentials (see [Environment Variables](#environment-vari
 ### 2. Run
 
 ```bash
-docker compose up --build
+make build
 ```
 
-### 3. Start chatting
+Or without `make`:
 
-Open your bot in Telegram and send any message. The agent will respond using the configured LLM.
+```bash
+docker compose \
+  -f docker-compose.yml \
+  -f docker-compose.core.yml \
+  -f docker-compose.apps.yml \
+  -f docker-compose.workers.yml \
+  -f docker-compose.override.yml \
+  up -d --build
+```
+
+### 3. Open the interfaces
+
+- **Telegram**: open your bot and send any message
+- **Web UI**: `http://localhost:8080`
+- **Flower** (Celery monitor): `http://localhost:5555`
+
+---
+
+## 🐳 Docker Compose Structure
+
+The project uses **split compose files** that can be combined depending on what you need:
+
+| File | Contents |
+|---|---|
+| `docker-compose.yml` | Base infra — postgres, redis, flower, shared networks & volumes |
+| `docker-compose.core.yml` | Core services — fastapi-calendar, mcp-calendar, mcp-reminders |
+| `docker-compose.apps.yml` | App services — telegram-bot, web-assistant |
+| `docker-compose.workers.yml` | Background workers — celery-worker, celery-beat |
+| `docker-compose.override.yml` | Dev overrides — exposes ports to the host machine |
+
+### Makefile commands
+
+```bash
+make build   # Build images and start the full stack with dev ports
+make up      # Start the full stack without rebuilding
+make dev     # Alias for up
+make down    # Stop all services
+make logs    # Tail logs from all services
+make core    # Start only infra + core services (no apps, no workers)
+```
+
+#### Compose presets used internally
+
+```
+COMPOSE_BASE = docker-compose.yml + docker-compose.core.yml
+COMPOSE_FULL = COMPOSE_BASE + docker-compose.apps.yml + docker-compose.workers.yml
+COMPOSE_DEV  = COMPOSE_FULL + docker-compose.override.yml   ← used by make build/up/down/logs
+```
+
+### Running individual services
+
+```bash
+# Only infra + core (no bot, no workers, no ports)
+make core
+
+# Web assistant only (with all its dependencies, dev ports)
+docker compose \
+  -f docker-compose.yml -f docker-compose.core.yml \
+  -f docker-compose.apps.yml -f docker-compose.override.yml \
+  up -d web-assistant
+
+# Telegram bot only
+docker compose \
+  -f docker-compose.yml -f docker-compose.core.yml \
+  -f docker-compose.apps.yml -f docker-compose.override.yml \
+  up -d telegram-bot
+```
 
 ---
 
@@ -115,7 +193,7 @@ REDIS_PASSWORD=your_redis_password
 REDIS_HOST=redis
 REDIS_PORT=6379
 
-# Services
+# Services (internal Docker hostnames — do not change unless remapping)
 FASTAPI_CALENDAR_HOST=fastapi-calendar
 FASTAPI_CALENDAR_PORT=8001
 MCP_CALENDAR_HOST=mcp-calendar
@@ -204,39 +282,28 @@ PortableAgent/
 │   │   │   └── mcp/
 │   │   │       ├── run.py           # MCP server entrypoint
 │   │   │       └── server.py        # Reminders MCP tools
-│   │   └── telegram/
-│   │       └── bot/
-│   │           ├── dependencies.py  # DI (agent, tools)
-│   │           ├── handlers.py      # aiogram message handlers
-│   │           └── main.py          # Bot entry point
+│   │   ├── telegram/
+│   │   │   └── bot/
+│   │   │       ├── dependencies.py  # DI (agent, tools)
+│   │   │       ├── handlers.py      # aiogram message handlers
+│   │   │       └── main.py          # Bot entry point
+│   │   └── web/
+│   │       ├── app.py               # FastAPI app + WebSocket endpoint
+│   │       ├── dependencies.py      # DI (agent per session)
+│   │       ├── main.py              # Web assistant entry point
+│   │       └── static/
+│   │           └── index.html       # Browser chat UI
 │   └── tasks/
 │       ├── celery_app.py            # Celery app + Beat schedule
 │       └── tasks.py                 # Task definitions
 ├── data/
-│   ├── configs/
-│   │   ├── base_config.py           # Base config
-│   │   ├── callbacks_config.py      # LangSmith/Langfuse config
-│   │   ├── database_config.py       # DB config
-│   │   ├── google_config.py         # Google OAuth config
-│   │   ├── llm_config.py            # LLM base config
-│   │   ├── ollama_config.py         # Ollama config
-│   │   ├── openai_config.py         # OpenAI config
-│   │   ├── redis_config.py          # Redis config
-│   │   └── tg_config.py             # Telegram config
+│   ├── configs/                     # Per-service config classes
 │   └── init_configs.py              # App-wide config initialization
 ├── db/
-│   ├── sqlalchemy/
-│   │   ├── google_crud.py           # Google token CRUD (PostgreSQL)
-│   │   ├── models.py                # SQLAlchemy ORM models
-│   │   ├── session.py               # DB session management
-│   │   └── user_crud.py             # User CRUD (PostgreSQL)
-│   ├── sqlite/
-│   │   ├── google_crud.py           # Google token CRUD (SQLite)
-│   │   ├── manager.py               # SQLite manager
-│   │   ├── schemas.py               # SQLite schemas
-│   │   └── user_crud.py             # User CRUD (SQLite)
+│   ├── sqlalchemy/                  # PostgreSQL CRUD + ORM models
+│   ├── sqlite/                      # SQLite CRUD (alternative backend)
 │   ├── database.py                  # DB abstraction layer
-│   └── database_protocol.py        # DB protocol/interface
+│   └── database_protocol.py         # DB protocol/interface
 ├── utils/
 │   ├── client_session.py            # Async HTTP client
 │   ├── const.py                     # Ports, URLs, shared constants
@@ -244,8 +311,13 @@ PortableAgent/
 │   ├── metaclasses.py               # Metaclasses
 │   ├── model_selector.py            # Interactive/auto LLM selector
 │   └── setup_logger.py              # Logger setup
-├── docker-compose.yml
-├── Dockerfile
+├── docker-compose.yml               # Base infra (postgres, redis, flower)
+├── docker-compose.core.yml          # Core services (calendar APIs, MCP servers)
+├── docker-compose.apps.yml          # App services (telegram-bot, web-assistant)
+├── docker-compose.workers.yml       # Background workers (celery-worker, celery-beat)
+├── docker-compose.override.yml      # Dev port overrides
+├── Makefile                         # Compose shortcuts
+├── Dockerfile                       # Single image for all services (uv + Python 3.12)
 └── pyproject.toml
 ```
 
@@ -253,11 +325,12 @@ PortableAgent/
 
 ## 🧠 Agent
 
-The bot uses a **LangGraph ReAct agent** with:
+Both the Telegram bot and the Web UI share the same **LangGraph ReAct agent** with:
 
 - **Persistent memory** via `AsyncPostgresSaver` (PostgreSQL checkpointer)
 - **MCP tools** — Google Calendar and Reminders tools loaded at startup
 - **Dynamic LLM selection** — auto-selects the first available LLM in Docker, interactive selection in TTY
+- **Session isolation** — Telegram uses `tg_id` as `thread_id`; Web UI uses a random 8-digit numeric `session_id`
 
 ### Available Tools (via MCP)
 
@@ -279,6 +352,18 @@ The bot uses a **LangGraph ReAct agent** with:
 
 ---
 
+## 🖥️ Web Assistant
+
+A browser-based chat interface that mirrors the Telegram bot experience.
+
+- Served at `http://localhost:8080` in dev mode (container port 8000, mapped via override)
+- Communicates with the agent over WebSocket (`/ws/{session_id}`)
+- Session ID is a random 8-digit number, generated in the browser and stored in `sessionStorage`
+- Agent responses are rendered as HTML (markdown converted server-side)
+- Shares the same MCP tools, LLM, and PostgreSQL checkpointer as the Telegram bot
+
+---
+
 ## 📅 Celery Tasks
 
 | Task | Trigger | Description |
@@ -292,41 +377,12 @@ The bot uses a **LangGraph ReAct agent** with:
 
 ## 🔐 Google Calendar Auth
 
-1. User sends any message to the bot
+1. User sends any message to the bot (Telegram or Web)
 2. Bot checks if user is authorized
 3. If not, agent calls `get_auth_url` and sends the link
 4. User opens the link and grants access
 5. Google redirects to `http://localhost:8001/calendar/oauth/callback`
 6. Token is saved; subsequent requests work automatically
-
----
-
-## 🛠 Development
-
-### Run a single service
-
-```bash
-docker compose up --build mcp-reminders
-```
-
-### View logs
-
-```bash
-docker compose logs -f telegram-bot
-docker compose logs -f celery-worker
-```
-
-### Rebuild after code changes
-
-```bash
-docker compose up --build
-```
-
-### Access the database
-
-```bash
-docker exec -it portableagent-postgres-1 psql -U postgres -d portableagent
-```
 
 ---
 
@@ -342,7 +398,8 @@ docker exec -it portableagent-postgres-1 psql -U postgres -d portableagent
 ## 📝 Notes
 
 - **Timezone**: Celery Beat runs in UTC. Morning digest at 09:00 UTC = 12:00 Moscow time.
-- **Memory**: Agent conversation history is stored per `tg_id` in PostgreSQL.
+- **Memory**: Agent conversation history is stored per `tg_id` / `session_id` in PostgreSQL.
 - **Model selection**: Without a TTY (Docker), the first LLM in the list is selected automatically. In a terminal, an interactive selector is shown.
 - **OpenAI**: Requires network access. If blocked, use Ollama instead.
-- **MCP_REMINDERS_HOST**: Must be set to `mcp-reminders` in `.env` — required for the bot to connect to the reminders service.
+- **Port exposure**: Host ports are only exposed in dev mode via `docker-compose.override.yml`. For production, omit it from the compose command.
+- **Web session persistence**: Web UI sessions persist across page reloads within the same browser tab (`sessionStorage`). Opening a new tab starts a fresh session.
