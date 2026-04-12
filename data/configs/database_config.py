@@ -1,4 +1,5 @@
 import os
+from src.enum import DatabaseType
 from .base_config import BaseConfig, BASE_DIR
 
 class DBConfig(BaseConfig):
@@ -16,7 +17,7 @@ class DBConfig(BaseConfig):
     
     @property
     def url(self) -> str:
-        if self.DB_TYPE == "sqlite":
+        if self.DB_TYPE == DatabaseType.SQLITE:
             return f"sqlite+aiosqlite:///{self.SQLITE_PATH}"
         return (
             f"postgresql+asyncpg://{self.DB_USER}:{self.DB_PASSWORD}"

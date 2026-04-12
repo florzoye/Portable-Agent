@@ -53,7 +53,6 @@ class GlobalCallbacksService:
         self._initialized = True
 
     def _init_langsmith(self) -> None:
-        """Инициализация LangSmith трейсинга"""
         if not self.langsmith_config.LANGCHAIN_TRACING_V2:
             return
 
@@ -63,7 +62,6 @@ class GlobalCallbacksService:
         os.environ["LANGCHAIN_ENDPOINT"] = self.langsmith_config.LANGCHAIN_ENDPOINT
 
     def _init_langfuse(self) -> None:
-        """Инициализация Langfuse трейсинга"""
         if not self.langfuse_config.USE_LANGFUSE:
             return
 
