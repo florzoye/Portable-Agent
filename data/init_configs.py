@@ -24,6 +24,7 @@ class ConfigRegistry(metaclass=SingletonLockMeta):
             self._ollama_config = None
             self._ports_config = None
             self._openai_config = None
+            self._xai_config = None
 
             # config with depends
             self._redis_client = None
@@ -39,6 +40,7 @@ class ConfigRegistry(metaclass=SingletonLockMeta):
         from data.configs.llm_config import BaseLLMConfig
         from data.configs.ollama_config import OllamaConfig
         from data.configs.openai_config import OpenAIConfig
+        from data.configs.xai_config import XAIConfig
 
         self._google_config = GoogleSettings()
         logger.success('✓ GoogleSettings init!')
@@ -60,6 +62,9 @@ class ConfigRegistry(metaclass=SingletonLockMeta):
         
         self._openai_config = OpenAIConfig()
         logger.success('✓ OpenAIConfig init!')
+
+        self._xai_config = XAIConfig()
+        logger.success('✓ XAIConfig init!')
 
     def _init_brokers(self):
         """initializing brokers and queue"""
@@ -189,6 +194,11 @@ class ConfigRegistry(metaclass=SingletonLockMeta):
     def OPENAI_CONFIG(self):
         self._check_initialized()
         return self._openai_config
+    
+    @property
+    def XAI_CONFIG(self):
+        self._check_initialized()
+        return self._xai_config
 
     @property
     def is_initialized(self) -> bool:
