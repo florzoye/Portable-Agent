@@ -17,12 +17,11 @@ class GetXaiLLM(BaseLLM):
 
             self._llm = ChatXAI(
                 model=cfg.XAI_MODEL,
-                num_predict=base.MAX_TOKENS, 
                 temperature=base.TEMPERATURE,
-                timeout=base.TIMEOUT,
                 top_p=base.TOP_P,
                 verbose=base.VERBOSE,
-                api_key=cfg.XAI_API_KEY
+                api_key=cfg.XAI_API_KEY,
+                streaming=True
             )
 
             self._initialized = True
@@ -37,6 +36,6 @@ class GetXaiLLM(BaseLLM):
         return (
             f"{self.__class__.__name__}("
             f"model={self._llm.model}, "
-            f"num_predict={self._llm.num_predict}, "
-            f"temperature={self._llm.temperature})"
+            f"temperature={self._llm.temperature}, "
+            f"streaming={self._llm.streaming}"
         )
