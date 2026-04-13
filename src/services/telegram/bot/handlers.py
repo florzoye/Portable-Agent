@@ -3,6 +3,7 @@ from aiogram.types import Message
 from aiogram.enums import ContentType
 from aiogram import Bot, Dispatcher, F
 
+from src.agents.chat import AgentInvoker
 from src.factories.tools_factory import get_tools
 from src.agents.llms.initializer import LLMInitializer
 from src.services.telegram.bot.dependencies import get_agent
@@ -81,16 +82,14 @@ def register_handlers(dp: Dispatcher):
 
         try:
             agent = await get_agent(tg_id)
+            invoker = AgentInvoker(agent, tg_id)
+            llm = await LLMInitializer.get_selected()
 
-            result = await agent.ainvoke(
-                {"messages": [{"role": "user", "content": text}]},
-                config={
-                    "configurable": {"thread_id": str(tg_id)},
-                    **cfg.RUNNABLE_CONFIG,
-                },
+            response = await invoker.invoke(
+                user_message=text,
+                runnable_config=cfg.RUNNABLE_CONFIG,
+                llm=llm,
             )
-
-            response = result["messages"][-1].content
             await _send_html(message, response)
 
         except Exception as e:
