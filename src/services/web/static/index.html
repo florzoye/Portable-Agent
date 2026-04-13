@@ -46,6 +46,55 @@
     gap: 10px;
   }
 
+  /* Model selector */
+  .model-selector { position: relative; display: flex; align-items: center; }
+
+  #model-select {
+    appearance: none;
+    background: #141414;
+    border: 0.5px solid #222;
+    border-radius: 20px;
+    color: #8a8a8a;
+    font-size: 11px;
+    font-family: "SF Mono", Consolas, monospace;
+    letter-spacing: 0.04em;
+    padding: 4px 24px 4px 10px;
+    cursor: pointer;
+    outline: none;
+    transition: border-color 0.2s, color 0.2s;
+    max-width: 180px;
+  }
+  #model-select:hover:not(:disabled) { border-color: #2e2e2e; color: #b0b0b0; }
+  #model-select:disabled { opacity: 0.35; cursor: not-allowed; }
+  #model-select option { background: #141414; color: #b0b0b0; }
+
+  .model-selector::after {
+    content: "";
+    pointer-events: none;
+    position: absolute;
+    right: 9px; top: 50%;
+    transform: translateY(-50%);
+    width: 0; height: 0;
+    border-left: 3.5px solid transparent;
+    border-right: 3.5px solid transparent;
+    border-top: 4px solid #444;
+  }
+
+  .model-tag {
+    font-size: 10px;
+    color: #2e6e40;
+    background: #0d1f13;
+    border: 0.5px solid #1a3d24;
+    border-radius: 10px;
+    padding: 2px 7px;
+    opacity: 0;
+    transition: opacity 0.3s;
+    letter-spacing: 0.03em;
+    pointer-events: none;
+  }
+  .model-tag.visible { opacity: 1; }
+
+  /* Status pill */
   .status-pill {
     display: flex;
     align-items: center;
@@ -63,10 +112,7 @@
     transition: background 0.4s;
     flex-shrink: 0;
   }
-  .dot.connected {
-    background: #3fb950;
-    box-shadow: 0 0 6px rgba(63,185,80,0.4);
-  }
+  .dot.connected { background: #3fb950; box-shadow: 0 0 6px rgba(63,185,80,0.4); }
 
   .session-id {
     font-size: 11px;
@@ -75,6 +121,7 @@
     letter-spacing: 0.05em;
   }
 
+  /* Messages */
   #messages {
     flex: 1;
     overflow-y: auto;
@@ -84,7 +131,6 @@
     gap: 4px;
     scroll-behavior: smooth;
   }
-
   #messages::-webkit-scrollbar { width: 4px; }
   #messages::-webkit-scrollbar-track { background: transparent; }
   #messages::-webkit-scrollbar-thumb { background: #1e1e1e; border-radius: 2px; }
@@ -99,7 +145,6 @@
     pointer-events: none;
     padding-bottom: 40px;
   }
-
   .empty-icon {
     width: 48px; height: 48px;
     border-radius: 14px;
@@ -107,12 +152,7 @@
     border: 0.5px solid #1e1e1e;
     display: flex; align-items: center; justify-content: center;
   }
-
-  #empty-state p {
-    font-size: 13px;
-    color: #383838;
-    letter-spacing: 0.01em;
-  }
+  #empty-state p { font-size: 13px; color: #383838; letter-spacing: 0.01em; }
 
   .msg-wrap {
     display: flex;
@@ -132,125 +172,78 @@
     line-height: 1.65;
     word-break: break-word;
   }
-
   .msg-wrap.user .bubble {
-    background: #162d4a;
-    color: #b8d4f0;
+    background: #162d4a; color: #b8d4f0;
     border-bottom-right-radius: 4px;
     border: 0.5px solid #1e3d5c;
   }
-
   .msg-wrap.assistant .bubble {
-    background: #141414;
-    color: #d8d8d8;
+    background: #141414; color: #d8d8d8;
     border-bottom-left-radius: 4px;
     border: 0.5px solid #1e1e1e;
   }
-
-  .bubble.error {
-    background: #1e0f0f;
-    border-color: #3d1a1a;
-    color: #d07070;
-  }
+  .bubble.error { background: #1e0f0f; border-color: #3d1a1a; color: #d07070; }
 
   .bubble b, .bubble strong { color: #f0f0f0; font-weight: 600; }
   .bubble a { color: #4d8fbf; text-decoration: none; border-bottom: 0.5px solid #4d8fbf; }
   .bubble code {
-    background: #1e1e1e;
-    padding: 1px 5px;
-    border-radius: 4px;
-    font-size: 12.5px;
-    font-family: "SF Mono", Consolas, monospace;
-    color: #c0c0c0;
+    background: #1e1e1e; padding: 1px 5px; border-radius: 4px;
+    font-size: 12.5px; font-family: "SF Mono", Consolas, monospace; color: #c0c0c0;
   }
   .bubble pre {
-    background: #111;
-    border: 0.5px solid #222;
-    border-radius: 8px;
-    padding: 12px;
-    overflow-x: auto;
-    margin: 8px 0;
+    background: #111; border: 0.5px solid #222; border-radius: 8px;
+    padding: 12px; overflow-x: auto; margin: 8px 0;
   }
   .bubble pre code { background: none; padding: 0; }
   .bubble ul, .bubble ol { padding-left: 18px; margin: 5px 0; }
   .bubble li { margin: 2px 0; }
   .bubble p { margin: 4px 0; }
 
-  .typing .bubble {
-    display: flex;
-    align-items: center;
-    padding: 12px 16px;
-  }
+  .typing .bubble { display: flex; align-items: center; padding: 12px 16px; }
   .dot-pulse { display: flex; gap: 5px; }
   .dot-pulse span {
-    width: 5px; height: 5px;
-    border-radius: 50%;
-    background: #333;
+    width: 5px; height: 5px; border-radius: 50%; background: #333;
     animation: pulse 1.2s infinite;
   }
   .dot-pulse span:nth-child(2) { animation-delay: 0.2s; }
   .dot-pulse span:nth-child(3) { animation-delay: 0.4s; }
   @keyframes pulse {
     0%,80%,100% { opacity: 0.3; transform: scale(0.75); }
-    40% { opacity: 1; transform: scale(1); }
+    40%          { opacity: 1;   transform: scale(1);    }
   }
 
+  /* Footer */
   footer {
     padding: 10px 16px 14px;
     border-top: 0.5px solid #161616;
     background: #0f0f0f;
     flex-shrink: 0;
   }
-
   #input-row {
-    display: flex;
-    gap: 8px;
-    align-items: flex-end;
-    background: #141414;
-    border: 0.5px solid #242424;
-    border-radius: 13px;
-    padding: 8px 8px 8px 14px;
+    display: flex; gap: 8px; align-items: flex-end;
+    background: #141414; border: 0.5px solid #242424;
+    border-radius: 13px; padding: 8px 8px 8px 14px;
     transition: border-color 0.2s;
   }
   #input-row:focus-within { border-color: #2e2e2e; }
-
   #input {
-    flex: 1;
-    background: none;
-    border: none;
-    outline: none;
-    color: #ddd;
-    font-size: 13.5px;
-    line-height: 1.5;
-    resize: none;
-    max-height: 120px;
-    font-family: inherit;
-    overflow-y: auto;
+    flex: 1; background: none; border: none; outline: none;
+    color: #ddd; font-size: 13.5px; line-height: 1.5;
+    resize: none; max-height: 120px; font-family: inherit; overflow-y: auto;
   }
   #input::placeholder { color: #363636; }
-
   #send-btn {
-    background: #162d4a;
-    border: 0.5px solid #1e3d5c;
-    border-radius: 9px;
-    width: 32px; height: 32px;
+    background: #162d4a; border: 0.5px solid #1e3d5c;
+    border-radius: 9px; width: 32px; height: 32px;
     display: flex; align-items: center; justify-content: center;
-    cursor: pointer;
-    color: #5a9ad0;
+    cursor: pointer; color: #5a9ad0;
     transition: background 0.15s, color 0.15s, transform 0.1s;
     flex-shrink: 0;
   }
   #send-btn:hover:not(:disabled) { background: #1e3d5c; color: #88c0f0; }
   #send-btn:active:not(:disabled) { transform: scale(0.94); }
   #send-btn:disabled { opacity: 0.3; cursor: not-allowed; }
-
-  .hint {
-    font-size: 11px;
-    color: #282828;
-    text-align: center;
-    margin-top: 7px;
-    letter-spacing: 0.01em;
-  }
+  .hint { font-size: 11px; color: #282828; text-align: center; margin-top: 7px; letter-spacing: 0.01em; }
 </style>
 </head>
 <body>
@@ -263,6 +256,12 @@
   </div>
   <h1>AI Assistant</h1>
   <div class="header-right">
+
+    <div class="model-selector">
+      <select id="model-select" disabled></select>
+    </div>
+    <span class="model-tag" id="model-tag">switched</span>
+
     <div class="status-pill">
       <div class="dot" id="status-dot"></div>
       <span class="session-id" id="session-label">——————</span>
@@ -295,6 +294,7 @@
 </footer>
 
 <script>
+  // ── Session ────────────────────────────────────────────────────────────────
   function getOrCreateSession() {
     let id = sessionStorage.getItem("chat_session");
     if (!id) {
@@ -307,15 +307,74 @@
   const SESSION_ID = getOrCreateSession();
   document.getElementById("session-label").textContent = SESSION_ID;
 
-  const messagesEl = document.getElementById("messages");
-  const emptyState = document.getElementById("empty-state");
-  const inputEl = document.getElementById("input");
-  const sendBtn = document.getElementById("send-btn");
-  const statusDot = document.getElementById("status-dot");
+  const messagesEl  = document.getElementById("messages");
+  const emptyState  = document.getElementById("empty-state");
+  const inputEl     = document.getElementById("input");
+  const sendBtn     = document.getElementById("send-btn");
+  const statusDot   = document.getElementById("status-dot");
+  const modelSelect = document.getElementById("model-select");
+  const modelTag    = document.getElementById("model-tag");
 
   let ws;
-  let isWaiting = false;
+  let isWaiting  = false;
+  let tagTimer   = null;
 
+  // ── Model selector ─────────────────────────────────────────────────────────
+  async function loadModels() {
+    try {
+      const [modelsRes, curRes] = await Promise.all([
+        fetch("/models"),
+        fetch(`/session/${SESSION_ID}/model`),
+      ]);
+      const { models }       = await modelsRes.json();
+      const { active_model } = await curRes.json();
+
+      if (models.length <= 1) {
+        modelSelect.style.display = "none";
+        return;
+      }
+
+      modelSelect.innerHTML = "";
+      models.forEach(m => {
+        const opt = document.createElement("option");
+        opt.value = m.id;
+        opt.textContent = m.label;
+        modelSelect.appendChild(opt);
+      });
+      modelSelect.value    = active_model;
+      modelSelect.disabled = false;
+
+    } catch (e) {
+      console.warn("Failed to load models:", e);
+      modelSelect.style.display = "none";
+    }
+  }
+
+  async function applyModel(modelId) {
+    modelSelect.disabled = true;
+    try {
+      const res = await fetch(`/session/${SESSION_ID}/model`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ model_id: modelId }),
+      });
+      if (res.ok) flashTag();
+    } catch (e) {
+      console.warn("Failed to switch model:", e);
+    } finally {
+      modelSelect.disabled = false;
+    }
+  }
+
+  function flashTag() {
+    modelTag.classList.add("visible");
+    clearTimeout(tagTimer);
+    tagTimer = setTimeout(() => modelTag.classList.remove("visible"), 2000);
+  }
+
+  modelSelect.addEventListener("change", () => applyModel(modelSelect.value));
+
+  // ── WebSocket ──────────────────────────────────────────────────────────────
   function connect() {
     const proto = location.protocol === "https:" ? "wss" : "ws";
     ws = new WebSocket(`${proto}://${location.host}/ws/${SESSION_ID}`);
@@ -336,31 +395,79 @@
 
     ws.onerror = () => ws.close();
 
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
+    ws.onmessage = ({ data }) => {
+      const msg = JSON.parse(data);
+
+      if (msg.type === "chunk") {
+        appendChunk(msg.content);
+        return;
+      }
+
+      if (msg.type === "done") return; // message follows
+
       removeTyping();
-      isWaiting = false;
+      isWaiting        = false;
       sendBtn.disabled = false;
 
-      if (data.type === "message") {
-        appendBubble("assistant", data.content, false);
-      } else if (data.type === "error") {
-        appendBubble("assistant", data.content, true);
+      if (msg.type === "message") {
+        finalizeStreaming(msg.content);
+      } else if (msg.type === "error") {
+        discardStreamingBubble();
+        appendBubble("assistant", msg.content, true);
       }
     };
   }
 
+  // ── Streaming rendering ────────────────────────────────────────────────────
+  let streamingWrap   = null;
+  let streamingBubble = null;
+  let streamingText   = "";
+
+  function appendChunk(chunk) {
+    if (!streamingBubble) {
+      removeTyping();
+      emptyState.style.display = "none";
+      streamingWrap = document.createElement("div");
+      streamingWrap.className = "msg-wrap assistant";
+      streamingBubble = document.createElement("div");
+      streamingBubble.className = "bubble";
+      streamingWrap.appendChild(streamingBubble);
+      messagesEl.appendChild(streamingWrap);
+    }
+    streamingText += chunk;
+    streamingBubble.textContent = streamingText;
+    scrollToBottom();
+  }
+
+  function finalizeStreaming(html) {
+    if (streamingBubble) {
+      // Swap raw text for final rendered HTML
+      streamingBubble.innerHTML = html;
+      streamingWrap   = null;
+      streamingBubble = null;
+      streamingText   = "";
+    } else {
+      // Fallback: streaming never started (plain invoke path)
+      appendBubble("assistant", html, false);
+    }
+    scrollToBottom();
+  }
+
+  function discardStreamingBubble() {
+    streamingWrap?.remove();
+    streamingWrap   = null;
+    streamingBubble = null;
+    streamingText   = "";
+  }
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
   function appendBubble(role, html, isError = false) {
     emptyState.style.display = "none";
-    const wrap = document.createElement("div");
+    const wrap   = document.createElement("div");
     wrap.className = `msg-wrap ${role}`;
     const bubble = document.createElement("div");
     bubble.className = "bubble" + (isError ? " error" : "");
-    if (role === "user") {
-      bubble.textContent = html;
-    } else {
-      bubble.innerHTML = html;
-    }
+    role === "user" ? (bubble.textContent = html) : (bubble.innerHTML = html);
     wrap.appendChild(bubble);
     messagesEl.appendChild(wrap);
     scrollToBottom();
@@ -375,13 +482,8 @@
     scrollToBottom();
   }
 
-  function removeTyping() {
-    document.getElementById("typing-indicator")?.remove();
-  }
-
-  function scrollToBottom() {
-    messagesEl.scrollTop = messagesEl.scrollHeight;
-  }
+  function removeTyping() { document.getElementById("typing-indicator")?.remove(); }
+  function scrollToBottom() { messagesEl.scrollTop = messagesEl.scrollHeight; }
 
   function sendMessage() {
     const text = inputEl.value.trim();
@@ -390,18 +492,15 @@
     ws.send(text);
     inputEl.value = "";
     inputEl.style.height = "auto";
-    isWaiting = true;
+    isWaiting        = true;
     sendBtn.disabled = true;
     showTyping();
   }
 
   sendBtn.addEventListener("click", sendMessage);
 
-  inputEl.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
-    }
+  inputEl.addEventListener("keydown", e => {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
   });
 
   inputEl.addEventListener("input", () => {
@@ -409,6 +508,8 @@
     inputEl.style.height = Math.min(inputEl.scrollHeight, 120) + "px";
   });
 
+  // ── Boot ───────────────────────────────────────────────────────────────────
+  loadModels();
   connect();
 </script>
 </body>
