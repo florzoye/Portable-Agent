@@ -44,13 +44,13 @@ A modular AI-powered assistant with Google Calendar integration, LangGraph agent
      └───────┬───────┘  └────────┬─────────┘
              │                   │
      ┌───────▼───────┐  ┌────────▼─────────┐
-     │FastAPI Calendar│  │  Celery Worker   │
+     │FastAPI Calendar│ │  Celery Worker   │
      │  (port 8001)  │  │  + Celery Beat   │
      └───────┬───────┘  └────────┬─────────┘
              │                   │
      ┌───────▼───────────────────▼──────────┐
-     │         PostgreSQL + Redis            │
-     └───────────────────────────────────────┘
+     │         PostgreSQL + Redis           │
+     └──────────────────────────────────────┘
 ```
 
 ### Services
@@ -208,6 +208,10 @@ OLLAMA_MODEL=your_model_name
 OPENAI_API_KEY=your_openai_key
 OPENAI_MODEL=your_model_name
 
+# xAI Grok (optional)
+XAI_API_KEY=your_xai_api_key
+XAI_MODEL=your_model_name
+
 # LLM config
 TEMPERATURE=0.1
 MAX_TOKENS=30000
@@ -232,9 +236,13 @@ LANGFUSE_BASE_URL=https://cloud.langfuse.com
 PortableAgent/
 ├── src/
 │   ├── agents/
+|   |   ├── chat/
+|   |   |   ├── base.py              # Base class for WebSocket Reciever 
+|   |   |   └── invoker.py           # Invoker for invoke agents response 
 │   │   ├── llms/
 │   │   │   ├── initializer.py       # Dynamic LLM module loader
 │   │   │   ├── ollama_llm.py        # Ollama LLM wrapper
+|   |   |   ├── grok_llm.py          # Grok LLM wrapper
 │   │   │   └── openai_llm.py        # OpenAI LLM wrapper
 │   │   ├── prompts/
 │   │   │   └── system.py            # Agent system prompt
@@ -300,8 +308,7 @@ PortableAgent/
 │   ├── configs/                     # Per-service config classes
 │   └── init_configs.py              # App-wide config initialization
 ├── db/
-│   ├── sqlalchemy/                  # PostgreSQL CRUD + ORM models
-│   ├── sqlite/                      # SQLite CRUD (alternative backend)
+│   ├── sqlalchemy/                  # PostgreSQL or SQLite CRUD + ORM models
 │   ├── database.py                  # DB abstraction layer
 │   └── database_protocol.py         # DB protocol/interface
 ├── utils/
