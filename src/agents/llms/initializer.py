@@ -55,7 +55,7 @@ class LLMInitializer:
         if not llm_classes:
             raise RuntimeError("❌ No registered LLM classes")
 
-        logger.info(f"Найдено LLM классов: {[c.__name__ for c in llm_classes]}")
+        logger.info(f"Find LLM classes: {[c.__name__ for c in llm_classes]}")
 
         for llm_class in llm_classes:
             try:
