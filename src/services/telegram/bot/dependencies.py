@@ -14,14 +14,11 @@ async def get_agent(tg_id: int) -> CompiledStateGraph:
     CompiledStateGraph stateless — the dialog state is persisted
     in AsyncPostgresSaver.
     """
-    checkpointer = await get_checkpointer()
-    tools = await get_tools()
-
     return await AgentsFactory(
         name="tg-assistant",
         model=LLMInitializer.get_selected(),
-        tools=tools,
+        tools=await get_tools(),
         system_prompt=AgentSystemPrompt(),
-        checkpointer=checkpointer,
+        checkpointer=await get_checkpointer(),
         tg_id=tg_id,
     ).aget_agent()
