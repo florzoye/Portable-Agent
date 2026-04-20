@@ -1,4 +1,3 @@
-from  markdown import markdown
 from typing import Any, Optional
 from datetime import timezone, datetime
 
@@ -19,32 +18,26 @@ def format_event(e: dict) -> str:
         f"\n   ID: {e.get('id')}"
         f"\n   Начало: {start_time}"
         f"\n   Конец: {end_time}"
-        + (f"\n   Место: {e.get('location')}" if e.get('location') else "")
-        + (f"\n   Описание: {e.get('description')}" if e.get('description') else "")
+        + (f"\n   Место: {e.get('location')}" if e.get("location") else "")
+        + (f"\n   Описание: {e.get('description')}" if e.get("description") else "")
     )
+
 
 class DataCreator:
     @staticmethod
-    def get_flow_web_config(
-        client_id: str, 
-        client_secret: str
-    ) -> dict:
+    def get_flow_web_config(client_id: str, client_secret: str) -> dict:
         return {
             "web": {
-                    "client_id": client_id,
-                    "client_secret": client_secret,
-                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                    "token_uri": "https://oauth2.googleapis.com/token",
-                    "redirect_uris": [GOOGLE_CALENDAR_REDIRECT_URI]
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                "token_uri": "https://oauth2.googleapis.com/token",
+                "redirect_uris": [GOOGLE_CALENDAR_REDIRECT_URI],
             }
         }
 
     @staticmethod
-    def credentials_dict(
-        token_data: Any,
-        client_id: str, 
-        client_secret: str
-    ) -> dict:
+    def credentials_dict(token_data: Any, client_id: str, client_secret: str) -> dict:
         return {
             "token": token_data.access_token,
             "refresh_token": token_data.refresh_token,
@@ -52,6 +45,7 @@ class DataCreator:
             "client_id": client_id,
             "client_secret": client_secret,
         }
+
 
 class DateTimeNormalizer:
     @staticmethod
@@ -67,9 +61,3 @@ class DateTimeNormalizer:
         if expiry and expiry.tzinfo is None:
             return expiry.replace(tzinfo=timezone.utc)
         return expiry
-
-def _md_to_html(text: str) -> str:
-    return markdown(
-        text,
-        extensions=["fenced_code", "tables", "nl2br"]
-    )
