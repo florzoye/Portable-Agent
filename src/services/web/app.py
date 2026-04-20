@@ -15,7 +15,7 @@ from src.agents.tools.reminders import close_reminders_client
 from src.factories.checkpointer_factory import close_checkpointer, get_checkpointer
 from src.factories.tools_factory import get_tools
 from src.services.web.dependencies import get_agent, get_session_model, set_session_model
-from utils.helpers import _md_to_html
+from utils.renderers import MessageRenderer
 
 STATIC_DIR = pathlib.Path(__file__).parent / "static"
 
@@ -133,7 +133,7 @@ async def websocket_chat(websocket: WebSocket, session_id: str):
                     sender=WebSocketSender(websocket),
                 )
 
-                html = _md_to_html(response)
+                html = MessageRenderer.for_web(response)
                 await websocket.send_json({"type": "message", "content": html})
 
             except Exception as e:
