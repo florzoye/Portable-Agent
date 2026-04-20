@@ -16,7 +16,6 @@ A modular AI-powered assistant with Google Calendar integration, LangGraph agent
 
 ### Upcoming / In Planning
 - 🔍 **Hybrid RAG** (dense + sparse) for smart retrieval
-- 📈 **Quant/Trading sub-agent**
 - 🎯 **Polymarket API integration** (prediction markets)
 - 📊 **Lifetime activity tracker**
 - 🐙 **GitHub commit/activity tracker**

@@ -27,6 +27,7 @@ dependencies = [
     "langgraph-checkpoint-postgres>=3.0.4",
     "langsmith>=0.7.6",
     "loguru>=0.7.3",
+    "markdown>=3.10.2",
     "mcp>=1.26.0",
     "psycopg-pool>=3.3.0",
     "psycopg[binary]>=3.3.3",
