@@ -41,15 +41,9 @@ class AgentInvoker:
         config: dict,
         sender: StreamSender | None,
     ) -> tuple[str, bool]:
-        """
-        Streams tokens via astream_events and accumulates the full response.
-        Forwards each token to the sender if one is provided.
-
-        Returns:
-            (full_text, success) — on failure returns ("", False) for fallback.
-        """
-        full_text = ""
         try:
+            final_state = None
+
             async for event in self.agent.astream_events(
                 {"messages": messages},
                 config=config,
@@ -58,17 +52,27 @@ class AgentInvoker:
                 if event.get("event") != "on_chat_model_stream":
                     continue
 
+                metadata = event.get("metadata", {})
+                langgraph_node = metadata.get("langgraph_node", "")
+
+                # Стримим клиенту только финальный ответ агента
+                if langgraph_node not in ("agent", "llm"):
+                    continue
+
                 chunk = event["data"]["chunk"]
                 token: str = chunk.content if hasattr(chunk, "content") else str(chunk)
                 if not token:
                     continue
 
-                full_text += token
                 if sender is not None:
                     await sender.send_chunk(token)
 
             if sender is not None:
                 await sender.send_done()
+
+            # Берём финальный текст из состояния графа — надёжнее, чем собирать из чанков
+            state = await self.agent.aget_state(config)
+            full_text = state.values["messages"][-1].content
 
             return full_text, True
 
