@@ -12,6 +12,7 @@ _session_models: dict[str, BaseChatModel] = {}
 
 def set_session_model(session_id: str, llm: BaseChatModel) -> None:
     _session_models[session_id] = llm
+    AgentsFactory.reset(tg_id=session_id)  
 
 
 def get_session_model(session_id: str) -> BaseChatModel:
