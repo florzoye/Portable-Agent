@@ -104,6 +104,7 @@ def register_handlers(dp: Dispatcher):
         AgentsFactory.reset(tg_id=tg_id) 
 
         await callback.answer(f"✅ Model switched: {model_id}")
+        await callback.message.edit_text(f"Model switched to: {model_id}")
 
     @dp.message(F.text)
     async def handle_text(message: Message):
