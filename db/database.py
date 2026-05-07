@@ -2,13 +2,11 @@ import logging
 from typing import Optional
 from contextlib import asynccontextmanager
 
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.sqlalchemy.models import Base
 from db.database_protocol import UsersBase, GoogleTokensBase
 
-from src.enum import DatabaseType
 from src.factories import repository_factory
 
 class Database:
@@ -69,15 +67,11 @@ class Database:
     async def drop_tables(self):
         if not self._initialized:
             raise RuntimeError("Database not initialized")
+
         engine = self.sqlalchemy_manager.get_engine()
 
-        if self.db_type == DatabaseType.POSTGRESQL:
-            async with engine.begin() as conn:
-                await conn.execute(text("DROP SCHEMA public CASCADE"))
-                await conn.execute(text("CREATE SCHEMA public"))
-        else:
-            async with engine.begin() as conn:
-                await conn.run_sync(Base.metadata.drop_all)
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.drop_all)
 
         self.logger.info("✅ All tables dropped")
 
