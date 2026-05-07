@@ -8,13 +8,25 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.models import TokenModel
 from db.database_protocol import GoogleTokensBase
 from db.sqlalchemy.models import GoogleToken, Users
+from utils.crypto import TokenCipher
 
 class GoogleTokensORM(GoogleTokensBase):
     def __init__(self, session: AsyncSession):
         self.session = session
         self.logger = logging.getLogger(self.__class__.__name__)
+        self._cipher = TokenCipher()
 
-    async def create_tables(self) -> bool:
+    def _encrypt_token(self, token: GoogleToken) -> None:
+        token.access_token = self._cipher.encrypt(token.access_token)
+        token.refresh_token = self._cipher.encrypt_optional(token.refresh_token)
+
+    def _decrypt_model(self, token: GoogleToken) -> TokenModel:
+        model = TokenModel.model_validate(token)
+        model.access_token = self._cipher.decrypt(model.access_token)
+        model.refresh_token = self._cipher.decrypt_optional(model.refresh_token)
+        return model
+
+    async def create_tables(self) -> bool: 
         ...
 
     async def save_token(
@@ -63,7 +75,7 @@ class GoogleTokensORM(GoogleTokensBase):
                 .limit(1)
             )
             token = result.scalar_one_or_none()
-            return TokenModel.model_validate(token) if token else None
+            return self._decrypt_model(token) if token else Non
         except Exception as e:
             self.logger.error(f"❌ Error when receiving a token for the user{user_id}: {e}")
             return None
@@ -78,7 +90,7 @@ class GoogleTokensORM(GoogleTokensBase):
                 .limit(1)
             )
             token = result.scalar_one_or_none()
-            return TokenModel.model_validate(token) if token else None
+            return self._decrypt_model(token) if token else None 
         except Exception as e:
             self.logger.error(f"❌ Error when receiving the token by tg_id {tg_id}: {e}")
             return None
@@ -110,9 +122,9 @@ class GoogleTokensORM(GoogleTokensBase):
         try:
             update_data: dict = {"updated_at": datetime.now()}
             if access_token is not None:
-                update_data["access_token"] = access_token
+                update_data["access_token"] = self._cipher.encrypt(access_token)
             if refresh_token is not None:
-                update_data["refresh_token"] = refresh_token
+                update_data["refresh_token"] = self._cipher.encrypt(refresh_token)
             if token_expiry is not None:
                 update_data["token_expiry"] = token_expiry
 
