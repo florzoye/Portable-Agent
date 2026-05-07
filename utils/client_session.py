@@ -33,8 +33,7 @@ class AsyncHTTPClient:
             try:
                 data = await r.json()
             except Exception:
-                # Broken JSON is a rare but possible case
-                data = await r.text()
+                data = await r.text() # сломаный JSON
         else:
             data = await r.text()
 

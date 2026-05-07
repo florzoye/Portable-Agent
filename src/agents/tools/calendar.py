@@ -25,7 +25,7 @@ async def _session_keeper(ready: asyncio.Event, stop: asyncio.Event) -> None:
         logger.exception("Calendar MCP session error")
     finally:
         _calendar_client_tools = []
-        ready.set()  # unblock waiters even on failure
+        ready.set()  # удаление кэша
 
 
 async def init_calendar_client() -> None:
