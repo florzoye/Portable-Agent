@@ -20,12 +20,7 @@ class UsersBase(ABC):
         email: Optional[str] = None,
         google_id: Optional[str] = None
     ) -> Optional[UserModel]:
-        """
-        Add a new user.
-
-        Returns:
-            Optional[UserModel]: UserModel for SQLite or Users for PostgreSQL
-        """
+        """Add a new user."""
         ...
 
     @abstractmethod
@@ -67,13 +62,7 @@ class UsersBase(ABC):
         email: Optional[str] = None,
         google_id: Optional[str] = None
     ) -> bool:
-        """
-        Update user data.
-
-        Note:
-            SQLite uses named parameters.
-            PostgreSQL can use **kwargs.
-        """
+        """Update user data."""
         ...
 
     @abstractmethod
@@ -115,12 +104,7 @@ class GoogleTokensBase(ABC):
 
     @abstractmethod
     async def get_token(self, user_id: int) -> Optional[TokenModel]:
-        """
-        Get a token by user_id.
-
-        Returns:
-            Optional[TokenModel]: TokenModel for SQLite or GoogleToken for PostgreSQL
-        """
+        """Get a token by user_id."""
         ...
 
     @abstractmethod
