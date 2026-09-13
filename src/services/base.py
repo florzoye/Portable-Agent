@@ -38,7 +38,7 @@ def create_app(
     if internal_auth:
         @app.middleware("http")
         async def require_internal_api_key(request: Request, call_next):
-            if request.url.path == "/health":
+            if request.url.path in {"/health", "/calendar/oauth/callback"}:
                 return await call_next(request)
             expected = os.environ.get("INTERNAL_API_KEY", "").strip()
             provided = request.headers.get("X-Internal-Api-Key", "")
