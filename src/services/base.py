@@ -7,6 +7,13 @@ from db.database import global_db_manager
 
 from utils.setup_logger import setup_logging
 
+
+def _get_cors_origins() -> list[str]:
+    from os import environ
+
+    configured = environ.get("CORS_ORIGINS", "http://localhost:8080")
+    return [origin.strip() for origin in configured.split(",") if origin.strip()]
+
 def create_app(
     title: str,
     routers: list,
@@ -27,7 +34,7 @@ def create_app(
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=_get_cors_origins(),
         allow_methods=["*"],
         allow_headers=["*"],
     )
