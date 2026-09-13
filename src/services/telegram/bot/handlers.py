@@ -28,15 +28,15 @@ def _model_id(llm) -> str:
 async def on_startup():
     try:
         await get_tools()
-    except Exception:
+    except (OSError, RuntimeError, ValueError):
         logger.exception("Failed to initialize tools")
     try:
         await LLMInitializer.initialize()
-    except Exception:
+    except (OSError, RuntimeError, ValueError):
         logger.exception("Failed to initialize LLM")
     try:
         await get_checkpointer()
-    except Exception:
+    except (OSError, RuntimeError, ValueError):
         logger.exception("Failed to initialize checkpointer")
     logger.info("🤖 Assistant started")
 
@@ -44,17 +44,17 @@ async def on_startup():
 async def on_shutdown():
     try:
         await close_calendar_client()
-    except Exception:
+    except (OSError, RuntimeError, ValueError):
         logger.exception("Failed to close calendar client")
 
     try:
         await close_reminders_client()
-    except Exception:
+    except (OSError, RuntimeError, ValueError):
         logger.exception("Failed to close reminders client")
 
     try:
         await close_checkpointer()
-    except Exception:
+    except (OSError, RuntimeError, ValueError):
         logger.exception("Failed to close checkpointer")
 
     logger.info("🤖 Assistant stopped")
@@ -125,7 +125,7 @@ def register_handlers(dp: Dispatcher):
             )
             await send_message(chat_id, response)
 
-        except Exception as e:
+        except (OSError, RuntimeError, ValueError) as e:
             logger.exception(f"Agent error for tg_id={tg_id}: {e}")
             await message.answer("⚠️ An error has occurred, try again")
 
