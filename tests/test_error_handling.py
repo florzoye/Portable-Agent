@@ -20,6 +20,7 @@ from src.agents.prompts.system import AgentSystemPrompt
 from src.agents.middleware import UserContextMiddleware
 from data.configs.tg_config import TelegramSettings
 from src.services.web.one_time_code import generate_login_code, normalize_login_code
+from src.services.web.app import _get_session_context
 
 
 class FakeResponse:
@@ -35,6 +36,21 @@ class FakeResponse:
 
     async def text(self):
         return "upstream returned invalid JSON"
+
+
+class FakeRedisSession:
+    def __init__(self):
+        self.values = {
+            "web_session:token": "42",
+            "web_session_thread:token": "thread-1",
+        }
+        self.expired = []
+
+    async def get(self, key):
+        return self.values.get(key)
+
+    async def expire(self, key, ttl):
+        self.expired.append((key, ttl))
 
 
 class ErrorHandlingTests(unittest.IsolatedAsyncioTestCase):
@@ -183,6 +199,22 @@ class ErrorHandlingTests(unittest.IsolatedAsyncioTestCase):
     def test_web_login_code_rejects_invalid_value(self):
         with self.assertRaises(ValueError):
             normalize_login_code("1234")
+
+    async def test_web_session_context_returns_server_thread_and_refreshes_ttl(self):
+        redis = FakeRedisSession()
+        config = type("Config", (), {"redis_client": redis})()
+
+        with patch("src.services.web.app.get_config", return_value=config):
+            context = await _get_session_context("token")
+
+        self.assertEqual(context, (42, "thread-1"))
+        self.assertEqual(
+            redis.expired,
+            [
+                ("web_session:token", 86400),
+                ("web_session_thread:token", 86400),
+            ],
+        )
 
 
 if __name__ == "__main__":
