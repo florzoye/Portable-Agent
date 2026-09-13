@@ -3,6 +3,7 @@ import logging
 from typing import Optional
 from datetime import datetime
 from sqlalchemy import select, update, delete
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models import TokenModel
@@ -63,7 +64,7 @@ class GoogleTokensORM(GoogleTokensBase):
                 self.logger.info(f"✅ The token for user {user_id} has been successfully saved")
                 return True
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             self.logger.error(f"❌ Error saving the token for the user {user_id}: {e}", exc_info=True)
             return False
 
@@ -77,7 +78,7 @@ class GoogleTokensORM(GoogleTokensBase):
             )
             token = result.scalar_one_or_none()
             return self._decrypt_model(token) if token else None  # ← фикс: Non → None
-        except Exception as e:
+        except SQLAlchemyError as e:
             self.logger.error(f"❌ Error when receiving a token for the user{user_id}: {e}")
             return None
 
@@ -92,7 +93,7 @@ class GoogleTokensORM(GoogleTokensBase):
             )
             token = result.scalar_one_or_none()
             return self._decrypt_model(token) if token else None
-        except Exception as e:
+        except SQLAlchemyError as e:
             self.logger.error(f"❌ Error when receiving the token by tg_id {tg_id}: {e}")
             return None
 
@@ -109,7 +110,7 @@ class GoogleTokensORM(GoogleTokensBase):
                 self.logger.warning(f"⚠️ Token for user {user_id} not found")
                 return False
             return await self._update_token_by_id(token.id, access_token, refresh_token, token_expiry)
-        except Exception as e:
+        except SQLAlchemyError as e:
             self.logger.error(f"❌ Error updating token for user {user_id}: {e}", exc_info=True)
             return False
 
@@ -136,7 +137,7 @@ class GoogleTokensORM(GoogleTokensBase):
             )
             self.logger.info(f"✅ Token id={token_id} has been successfully updated")
             return True
-        except Exception as e:
+        except SQLAlchemyError as e:
             self.logger.error(f"❌ Error updating token id={token_id}: {e}", exc_info=True)
             return False
 
@@ -147,7 +148,7 @@ class GoogleTokensORM(GoogleTokensBase):
             )
             self.logger.info(f"✅ User token {user_id} has been deleted")
             return True
-        except Exception as e:
+        except SQLAlchemyError as e:
             self.logger.error(f"❌ Error when deleting user token {user_id}: {e}")
             return False
 
@@ -159,7 +160,7 @@ class GoogleTokensORM(GoogleTokensBase):
                 .limit(1)
             )
             return result.scalar_one_or_none() is not None
-        except Exception as e:
+        except SQLAlchemyError as e:
             self.logger.error(f"❌ Error when checking the existence of a token for user {user_id}: {e}")
             return False
 

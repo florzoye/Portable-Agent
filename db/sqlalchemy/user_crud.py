@@ -1,6 +1,7 @@
 import logging
 from typing import Optional, List
 from sqlalchemy import select, update, delete
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models import UserModel
@@ -35,7 +36,7 @@ class UsersORM(UsersBase):
             self.logger.info(f"✅ User {tg_id} has been successfully added")
             return UserModel.model_validate(user)
         
-        except Exception as e:
+        except SQLAlchemyError as e:
             self.logger.error(f"❌ Error when adding a user {tg_id}: {e}", exc_info=True)
             return None
 
@@ -46,7 +47,7 @@ class UsersORM(UsersBase):
             )
             user = result.scalar_one_or_none()
             return UserModel.model_validate(user) if user else None
-        except Exception as e:
+        except SQLAlchemyError as e:
             self.logger.error(f"❌ Error when receiving the user {tg_id}: {e}")
             return None
 
@@ -57,7 +58,7 @@ class UsersORM(UsersBase):
             )
             user = result.scalar_one_or_none()
             return UserModel.model_validate(user) if user else None
-        except Exception as e:
+        except SQLAlchemyError as e:
             self.logger.error(f"❌ Error when receiving the user с ID {user_id}: {e}")
             return None
 
@@ -68,7 +69,7 @@ class UsersORM(UsersBase):
             )
             user = result.scalar_one_or_none()
             return UserModel.model_validate(user) if user else None
-        except Exception as e:
+        except SQLAlchemyError as e:
             self.logger.error(f"❌ Error when receiving the user с google_id {google_id}: {e}")
             return None
 
@@ -77,7 +78,7 @@ class UsersORM(UsersBase):
             result = await self.session.execute(select(Users))
             users = result.scalars().all()
             return [UserModel.model_validate(u) for u in users]
-        except Exception as e:
+        except SQLAlchemyError as e:
             self.logger.error(f"❌Error when receiving the all users: {e}")
             return []
 
@@ -87,7 +88,7 @@ class UsersORM(UsersBase):
                 select(Users.id).where(Users.tg_id == tg_id).limit(1)
             )
             return result.scalar_one_or_none() is not None
-        except Exception as e:
+        except SQLAlchemyError as e:
             self.logger.error(f"❌ Error checking the user's existence {tg_id}: {e}")
             return False
 
@@ -97,7 +98,7 @@ class UsersORM(UsersBase):
                 select(Users.id).where(Users.google_id == google_id).limit(1)
             )
             return result.scalar_one_or_none() is not None
-        except Exception as e:
+        except SQLAlchemyError as e:
             self.logger.error(f"❌Error checking the existence google_id {google_id}: {e}")
             return False
 
@@ -130,7 +131,7 @@ class UsersORM(UsersBase):
             )
             self.logger.info(f"✅User {tg_id} has been successfully updated")
             return True
-        except Exception as e:
+        except SQLAlchemyError as e:
             self.logger.error(f"❌Error when updating the user {tg_id}: {e}")
             return False
 
@@ -141,7 +142,7 @@ class UsersORM(UsersBase):
             )
             self.logger.info(f"✅ User {tg_id} has been deleted")
             return True
-        except Exception as e:
+        except SQLAlchemyError as e:
             self.logger.error(f"❌ Error when deleting user {tg_id}: {e}")
             return False
     
