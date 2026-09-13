@@ -129,10 +129,10 @@ async def get_events_range(tg_id: int, start: str, end: str) -> str:
         return "❌ The user is not authorized in Google Calendar"
 
     if status != 200:
-        return f"❌ Server error ({status}): {data}"
+        return f"❌ Calendar service error ({status})"
 
     if not isinstance(data, dict):
-        return f"❌Incorrect server response: {data}"
+        return "❌ Incorrect response from calendar service"
 
     events = data.get("events", [])
     if not events:
@@ -184,10 +184,10 @@ async def get_events_by_date(tg_id: int, date: str) -> str:
         return "❌ The user is not authorized in Google Calendar"
 
     if status != 200:
-        return f"❌ Server error ({status}): {data}"
+        return f"❌ Calendar service error ({status})"
 
     if not isinstance(data, dict):
-        return f"❌ Incorrect server response: {data}"
+        return "❌ Incorrect response from calendar service"
 
     events = data.get("events", [])
     if not events:
@@ -243,7 +243,7 @@ async def create_event(
     if status == 401:
         return "❌ The user is not logged in"
     if status != 200:
-        return f"❌ Server Error: {status} — {data}"
+        return f"❌ Calendar service error ({status})"
 
     return format_event(data.get("event", {}))
 
