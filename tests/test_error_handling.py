@@ -16,6 +16,7 @@ from utils.client_session import AsyncHTTPClient
 from utils.crypto import TokenCipher
 from utils.helpers import DateTimeNormalizer
 from src.models.events import EventsRangeRequest, SearchEventsRequest
+from src.agents.prompts.system import AgentSystemPrompt
 
 
 class FakeResponse:
@@ -110,6 +111,17 @@ class ErrorHandlingTests(unittest.IsolatedAsyncioTestCase):
                 query="meeting",
                 days_ahead=91,
             )
+
+    def test_system_prompt_contains_tool_verification_rules(self):
+        prompt = AgentSystemPrompt.get_prompt(
+            memory_path="/memory/users/1/AGENTS.md",
+            tg_id=1,
+            channel="web",
+        ).content
+
+        self.assertIn("After every write operation, verify the result", prompt)
+        self.assertIn("for create_followup pass it as tg_id", prompt)
+        self.assertIn('channel="web"', prompt)
 
 
 if __name__ == "__main__":
