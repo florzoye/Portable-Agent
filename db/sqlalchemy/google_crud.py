@@ -26,7 +26,7 @@ class GoogleTokensORM(GoogleTokensBase):
         model.refresh_token = self._cipher.decrypt_optional(model.refresh_token)
         return model
 
-    async def create_tables(self) -> bool: 
+    async def create_tables(self) -> bool:
         ...
 
     async def save_token(
@@ -57,6 +57,7 @@ class GoogleTokensORM(GoogleTokensBase):
                     token_type=token_type,
                     scopes=json.dumps(scopes) if scopes is not None else None
                 )
+                self._encrypt_token(token)  # ← фикс: шифруем перед сохранением
                 self.session.add(token)
                 await self.session.flush()
                 self.logger.info(f"✅ The token for user {user_id} has been successfully saved")
@@ -75,7 +76,7 @@ class GoogleTokensORM(GoogleTokensBase):
                 .limit(1)
             )
             token = result.scalar_one_or_none()
-            return self._decrypt_model(token) if token else Non
+            return self._decrypt_model(token) if token else None  # ← фикс: Non → None
         except Exception as e:
             self.logger.error(f"❌ Error when receiving a token for the user{user_id}: {e}")
             return None
@@ -84,13 +85,13 @@ class GoogleTokensORM(GoogleTokensBase):
         try:
             result = await self.session.execute(
                 select(GoogleToken)
-                .join(Users, GoogleToken.user_id == Users.id)  
+                .join(Users, GoogleToken.user_id == Users.id)
                 .where(Users.tg_id == tg_id)
                 .order_by(GoogleToken.created_at.desc())
                 .limit(1)
             )
             token = result.scalar_one_or_none()
-            return self._decrypt_model(token) if token else None 
+            return self._decrypt_model(token) if token else None
         except Exception as e:
             self.logger.error(f"❌ Error when receiving the token by tg_id {tg_id}: {e}")
             return None
@@ -133,10 +134,10 @@ class GoogleTokensORM(GoogleTokensBase):
                 .where(GoogleToken.id == token_id)
                 .values(**update_data)
             )
-            self.logger.info(f"✅Token id={token_id} has been successfully updated")
+            self.logger.info(f"✅ Token id={token_id} has been successfully updated")
             return True
         except Exception as e:
-            self.logger.error(f"❌Error updating token id={token_id}: {e}", exc_info=True)
+            self.logger.error(f"❌ Error updating token id={token_id}: {e}", exc_info=True)
             return False
 
     async def delete_token(self, user_id: int) -> bool:
