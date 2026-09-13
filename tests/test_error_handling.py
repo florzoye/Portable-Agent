@@ -1,6 +1,8 @@
 import os
 import unittest
 from unittest.mock import patch
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 import aiohttp
 from cryptography.fernet import Fernet
@@ -12,6 +14,8 @@ from src.services.reminders.mcp.server import (
 )
 from utils.client_session import AsyncHTTPClient
 from utils.crypto import TokenCipher
+from utils.helpers import DateTimeNormalizer
+from src.models.events import EventsRangeRequest, SearchEventsRequest
 
 
 class FakeResponse:
@@ -83,6 +87,29 @@ class ErrorHandlingTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(cipher.decrypt(encrypted), "secret")
             with self.assertRaises(ValueError):
                 cipher.decrypt("invalid-token")
+
+    def test_expiry_is_converted_to_utc_before_timezone_is_removed(self):
+        expiry = datetime(2026, 1, 1, 12, tzinfo=ZoneInfo("Europe/Moscow"))
+
+        normalized = DateTimeNormalizer.normalize_expiry_for_db(expiry)
+
+        self.assertEqual(normalized, datetime(2026, 1, 1, 9))
+
+    def test_event_range_requires_timezone(self):
+        with self.assertRaises(ValueError):
+            EventsRangeRequest(
+                user_id=1,
+                start="2026-01-01T10:00:00",
+                end="2026-01-01T11:00:00",
+            )
+
+    def test_search_window_is_bounded(self):
+        with self.assertRaises(ValueError):
+            SearchEventsRequest(
+                user_id=1,
+                query="meeting",
+                days_ahead=91,
+            )
 
 
 if __name__ == "__main__":
