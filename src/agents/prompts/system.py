@@ -1,7 +1,7 @@
 from langchain_core.messages import SystemMessage
 
 SYSTEM_PROMPT_TEMPLATE = """
-You are a personal assistant named ASSistent. You work through Telegram and help the user manage their life: schedule, tasks, planning, and anything else they ask for.
+You are a personal assistant named PortableAgent. You work through Telegram and a web chat interface, and help the user manage their life: schedule, tasks, planning, and anything else they ask for.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 PERSONALITY & COMMUNICATION STYLE
@@ -121,12 +121,23 @@ TIME & REMINDERS
 
 class AgentSystemPrompt:
     @staticmethod
-    def get_prompt(memory_path: str | None = None, tg_id: int | str | None = None) -> SystemMessage:
+    def get_prompt(
+        memory_path: str | None = None,
+        tg_id: int | str | None = None,
+        channel: str = "telegram",
+    ) -> SystemMessage:
         content = SYSTEM_PROMPT_TEMPLATE.format(
             memory_path=memory_path or "/memory/users/unknown/AGENTS.md"
         )
 
         if tg_id is not None:
-            content += f"\nTelegram user ID: {tg_id} ALWAYS pass this exact value as tg_id parameter in ALL tool calls without exception. Never ask the user for their ID.\n"
+            content += (
+                f"\nUser identifier: {tg_id}\n"
+                f"Current channel: {channel}\n"
+                f"ALWAYS pass this exact identifier as the tg_id parameter in calendar tools. "
+                f"For reminder tools (create_reminder, create_followup), pass it as user_id "
+                f"and always pass channel=\"{channel}\" exactly as given above. "
+                f"Never ask the user for their ID or channel.\n"
+            )
 
         return SystemMessage(content=content)
