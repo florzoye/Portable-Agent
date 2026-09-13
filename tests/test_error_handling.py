@@ -144,6 +144,9 @@ class ErrorHandlingTests(unittest.IsolatedAsyncioTestCase):
         ).content
 
         self.assertIn("After every write operation, verify the result", prompt)
+        self.assertIn("Treat a tool call as successful only when `ok` is exactly `true`", prompt)
+        self.assertIn("Use `data` for factual IDs, events, timestamps", prompt)
+        self.assertIn("Never store tool payloads, transient errors", prompt)
         self.assertIn("for create_followup pass it as tg_id", prompt)
         self.assertIn('channel="web"', prompt)
 
