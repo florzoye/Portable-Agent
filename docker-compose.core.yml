@@ -6,6 +6,7 @@ services:
     environment:
       FASTAPI_CALENDAR_PORT: 8001
       FASTAPI_CALENDAR_HOST: fastapi-calendar
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY}
       GOOGLE_CALENDAR_REDIRECT_URI: "http://localhost:8001/calendar/oauth/callback"
     volumes:
       - sqlite-data:/app/data/db
@@ -32,6 +33,7 @@ services:
       MCP_CALENDAR_PORT: 8002
       FASTAPI_CALENDAR_HOST: fastapi-calendar
       FASTAPI_CALENDAR_PORT: 8001
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY}
     networks:
       - app-net
     depends_on:

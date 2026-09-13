@@ -1,6 +1,8 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from contextlib import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+import os
 
 from data import init
 from db.database import global_db_manager
@@ -18,11 +20,12 @@ def create_app(
     title: str,
     routers: list,
     port: int = 8000,
+    internal_auth: bool = False,
 ) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        setup_logging()
+        setup_logging(title)
         init()
         
         await global_db_manager.setup()
@@ -31,6 +34,20 @@ def create_app(
         await global_db_manager.close()
 
     app = FastAPI(title=title, lifespan=lifespan)
+
+    if internal_auth:
+        @app.middleware("http")
+        async def require_internal_api_key(request: Request, call_next):
+            if request.url.path == "/health":
+                return await call_next(request)
+            expected = os.environ.get("INTERNAL_API_KEY", "").strip()
+            provided = request.headers.get("X-Internal-Api-Key", "")
+            if not expected or provided != expected:
+                return JSONResponse(
+                    status_code=401,
+                    content={"detail": "Internal authentication required"},
+                )
+            return await call_next(request)
 
     app.add_middleware(
         CORSMiddleware,

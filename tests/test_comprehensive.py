@@ -153,6 +153,30 @@ class ComprehensiveTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("PortableAgent Monitoring", page.body.decode())
         self.assertIn("/stats", page.body.decode())
 
+    async def test_calendar_service_requires_internal_api_key(self):
+        from src.services.base import create_app
+        from fastapi import APIRouter
+
+        router = APIRouter()
+
+        @router.get("/protected")
+        async def protected():
+            return {"ok": True}
+
+        test_app = create_app("Calendar", [router], internal_auth=True)
+        with patch.dict("os.environ", {"INTERNAL_API_KEY": "expected"}):
+            from starlette.testclient import TestClient
+            client = TestClient(test_app)
+            response = client.get("/health")
+            self.assertEqual(response.status_code, 200)
+            response = client.get("/protected")
+            self.assertEqual(response.status_code, 401)
+            response = client.get(
+                "/protected",
+                headers={"X-Internal-Api-Key": "expected"},
+            )
+            self.assertEqual(response.status_code, 200)
+
 
 if __name__ == "__main__":
     unittest.main()

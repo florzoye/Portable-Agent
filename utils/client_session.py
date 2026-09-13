@@ -1,5 +1,6 @@
 import aiohttp
 import json
+import os
 from typing import Any, Optional
 from utils.const import GOOGLE_CALENDAR_URI
 
@@ -9,11 +10,16 @@ class AsyncHTTPClient:
         self.base_url = base_url.rstrip("/") + "/"
         self.timeout = aiohttp.ClientTimeout(total=timeout)
         self._session: Optional[aiohttp.ClientSession] = None
+        self._headers = {}
+        api_key = os.environ.get("INTERNAL_API_KEY", "").strip()
+        if api_key:
+            self._headers["X-Internal-Api-Key"] = api_key
 
     async def __aenter__(self) -> "AsyncHTTPClient":
         self._session = aiohttp.ClientSession(
             base_url=self.base_url,
-            timeout=self.timeout
+            timeout=self.timeout,
+            headers=self._headers,
         )
         return self
 
