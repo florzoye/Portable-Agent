@@ -5,11 +5,9 @@ from langchain.agents.structured_output import ResponseFormat
 from langgraph.graph.state import CompiledStateGraph
 
 from deepagents import create_deep_agent
-from deepagents.backends import FilesystemBackend, StateBackend
-from deepagents.middleware import SummarizationMiddleware
+from deepagents.backends import FilesystemBackend
 from src.agents.prompts.system import AgentSystemPrompt
 from src.factories.middleware_factory import MiddlewareFactory
-from data.init_configs import get_config
 
 from utils.metaclasses import AgentsFactoryMeta
 
@@ -42,21 +40,7 @@ class AgentsFactory(metaclass=AgentsFactoryMeta):
         return f"/memory/users/{self.tg_id}/AGENTS.md"
 
     async def aget_agent(self) -> CompiledStateGraph:
-        llm_config = get_config().BASE_LLM_CONFIG
         middleware = list(self.middleware.get_middleware()) if self.middleware else []
-        middleware.append(
-            SummarizationMiddleware(
-                model=self.model,
-                backend=lambda runtime: StateBackend(runtime),
-                trigger=("tokens", llm_config.CONTEXT_TRIGGER_TOKENS),
-                keep=("messages", llm_config.CONTEXT_KEEP_MESSAGES),
-                truncate_args_settings={
-                    "trigger": ("tokens", llm_config.CONTEXT_TRIGGER_TOKENS),
-                    "keep": ("messages", llm_config.CONTEXT_KEEP_MESSAGES),
-                    "max_length": llm_config.CONTEXT_MAX_TOOL_ARG_LENGTH,
-                },
-            )
-        )
 
         return create_deep_agent(
             name=self.name,
