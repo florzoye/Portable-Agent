@@ -14,9 +14,11 @@ from src.agents.tools.reminders import close_reminders_client
 from src.agents.tools.calendar import close_calendar_client
 
 from data import get_config
+from src.services.web.one_time_code import generate_login_code
 
 _bot: Bot | None = None
 MAX_MESSAGE_LEN = 4096
+LOGIN_CODE_TTL = 300
 
 def init_telegram_sender(bot: Bot) -> None:
     global _bot
@@ -67,6 +69,19 @@ async def send_message(tg_id: int, text: str) -> None:
 
 
 def register_handlers(dp: Dispatcher):
+
+    @dp.message(Command("web"))
+    async def handle_web_login(message: Message):
+        code = generate_login_code()
+        await get_config().redis_client.setex(
+            f"web_login_code:{code}",
+            LOGIN_CODE_TTL,
+            str(message.from_user.id),
+        )
+        await message.answer(
+            "Код для входа в Web UI: "
+            f"{code}\nКод действителен 5 минут и одноразовый."
+        )
 
     @dp.message(Command("switch_model"))
     async def handle_switch_model(message: Message):

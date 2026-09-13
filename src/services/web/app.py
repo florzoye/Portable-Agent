@@ -19,7 +19,7 @@ from src.factories.checkpointer_factory import close_checkpointer, get_checkpoin
 from src.factories.tools_factory import get_tools
 from src.services.dependencies import get_agent, get_session_model, set_session_model
 from utils.renderers import MessageRenderer
-from src.services.web.telegram_auth import TelegramAuthError, validate_login_widget
+from src.services.web.one_time_code import normalize_login_code
 
 STATIC_DIR = pathlib.Path(__file__).parent / "static"
 SESSION_COOKIE = "portable_session"
@@ -109,19 +109,11 @@ async def list_models():
     return {"models": _build_model_list()}
 
 
-@app.get("/auth/config")
-async def auth_config():
-    username = get_config().TG_SETTINGS.TELEGRAM_BOT_USERNAME
-    if not username:
-        raise HTTPException(status_code=503, detail="Telegram login is not configured")
-    return {"bot_username": username}
-
-
 class SelectModelRequest(BaseModel):
     model_id: str
 
-class TelegramLoginRequest(BaseModel):
-    auth_data: str
+class CodeLoginRequest(BaseModel):
+    code: str
 
 
 async def _get_session_user(session_id: str | None) -> int:
@@ -133,19 +125,23 @@ async def _get_session_user(session_id: str | None) -> int:
     return int(value)
 
 
-@app.post("/auth/telegram")
-async def telegram_login(body: TelegramLoginRequest, response: Response):
+@app.post("/auth/code")
+async def code_login(body: CodeLoginRequest, response: Response):
     cfg = get_config()
     try:
-        user = validate_login_widget(body.auth_data, cfg.TG_SETTINGS.BOT_TOKEN)
-    except TelegramAuthError as exc:
+        code = normalize_login_code(body.code)
+    except ValueError as exc:
         raise HTTPException(status_code=401, detail=str(exc)) from exc
+
+    user_id = await cfg.redis_client.getdel(f"web_login_code:{code}")
+    if user_id is None:
+        raise HTTPException(status_code=401, detail="Invalid or expired login code")
 
     session_id = secrets.token_urlsafe(32)
     await cfg.redis_client.setex(
         f"{SESSION_KEY_PREFIX}{session_id}",
         SESSION_TTL,
-        str(user["id"]),
+        str(user_id),
     )
     response.set_cookie(
         SESSION_COOKIE,
@@ -155,7 +151,7 @@ async def telegram_login(body: TelegramLoginRequest, response: Response):
         secure=os.environ.get("WEB_COOKIE_SECURE", "false").lower() == "true",
         samesite="lax",
     )
-    return {"user": user}
+    return {"user_id": int(user_id)}
 
 
 @app.post("/session/{session_id}/model")
@@ -169,7 +165,7 @@ async def select_model(
     if llm is None:
         
         raise HTTPException(status_code=404, detail=f"Model '{body.model_id}' not found")
-    set_session_model(session_id, llm)
+    set_session_model(session_id, llm, user_id)
     return {"session_id": session_id, "active_model": body.model_id}
 
 

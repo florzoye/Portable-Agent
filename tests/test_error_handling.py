@@ -19,11 +19,7 @@ from src.models.events import EventsRangeRequest, SearchEventsRequest
 from src.agents.prompts.system import AgentSystemPrompt
 from src.agents.middleware import UserContextMiddleware
 from data.configs.tg_config import TelegramSettings
-from src.services.web.telegram_auth import (
-    TelegramAuthError,
-    build_login_widget_data,
-    validate_login_widget,
-)
+from src.services.web.one_time_code import generate_login_code, normalize_login_code
 
 
 class FakeResponse:
@@ -179,34 +175,14 @@ class ErrorHandlingTests(unittest.IsolatedAsyncioTestCase):
                 TELEGRAM_PROXY="ftp://proxy.example:21",
             )
 
-    def test_telegram_login_widget_returns_signed_user(self):
-        fields = {
-            "auth_date": "1760000000",
-            "id": "42",
-            "first_name": "Test",
-        }
-        init_data = build_login_widget_data(fields, "bot-token")
+    def test_web_login_code_is_numeric_and_fixed_length(self):
+        code = generate_login_code()
+        self.assertEqual(len(code), 8)
+        self.assertEqual(normalize_login_code(code), code)
 
-        user = validate_login_widget(init_data, "bot-token", now=1760000010)
-
-        self.assertEqual(user["id"], 42)
-
-    def test_telegram_login_widget_rejects_tampered_payload(self):
-        fields = {"auth_date": "1760000000", "id": "42"}
-        init_data = build_login_widget_data(fields, "bot-token").replace(
-            "id=42",
-            "id=99",
-        )
-
-        with self.assertRaises(TelegramAuthError):
-            validate_login_widget(init_data, "bot-token", now=1760000010)
-
-    def test_telegram_login_widget_rejects_expired_payload(self):
-        fields = {"auth_date": "1760000000", "id": "42"}
-        init_data = build_login_widget_data(fields, "bot-token")
-
-        with self.assertRaises(TelegramAuthError):
-            validate_login_widget(init_data, "bot-token", now=1760000000 + 86401)
+    def test_web_login_code_rejects_invalid_value(self):
+        with self.assertRaises(ValueError):
+            normalize_login_code("1234")
 
 
 if __name__ == "__main__":
