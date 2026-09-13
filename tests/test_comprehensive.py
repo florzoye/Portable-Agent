@@ -1,0 +1,123 @@
+import json
+import unittest
+from unittest.mock import patch
+
+from fastapi import HTTPException
+
+from src.agents.memory import normalize_memory_user_id, user_memory_path
+from src.services.calendar.mcp.common import event_list_result, event_result
+from src.services.tool_result import tool_failure, tool_success
+from src.services.web.app import _get_session_context
+from src.services.web.one_time_code import (
+    generate_login_code,
+    normalize_login_code,
+)
+from utils.observability import emit_event, timed_event
+
+
+class FakeRedis:
+    def __init__(self, values=None):
+        self.values = values or {}
+        self.expired = []
+
+    async def get(self, key):
+        return self.values.get(key)
+
+    async def expire(self, key, ttl):
+        self.expired.append((key, ttl))
+
+
+class ComprehensiveTests(unittest.IsolatedAsyncioTestCase):
+    async def test_authenticated_session_returns_server_owned_thread(self):
+        redis = FakeRedis({
+            "web_session:session": "42",
+            "web_session_thread:session": "server-thread",
+        })
+        config = type("Config", (), {"redis_client": redis})()
+
+        with patch("src.services.web.app.get_config", return_value=config):
+            user_id, thread_id = await _get_session_context("session")
+
+        self.assertEqual((user_id, thread_id), (42, "server-thread"))
+        self.assertEqual(len(redis.expired), 2)
+
+    async def test_missing_session_is_rejected(self):
+        redis = FakeRedis()
+        config = type("Config", (), {"redis_client": redis})()
+
+        with patch("src.services.web.app.get_config", return_value=config):
+            with self.assertRaises(HTTPException) as error:
+                await _get_session_context("missing")
+
+        self.assertEqual(error.exception.status_code, 401)
+
+    def test_login_code_is_numeric_and_exactly_eight_digits(self):
+        code = generate_login_code()
+
+        self.assertRegex(code, r"^\d{8}$")
+        self.assertEqual(normalize_login_code(f"  {code} "), code)
+
+    def test_mcp_success_result_keeps_machine_data(self):
+        result = tool_success("created", {"event_id": "event-1"})
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["code"], "ok")
+        self.assertEqual(result["data"]["event_id"], "event-1")
+
+    def test_mcp_failure_result_is_not_success_shaped(self):
+        result = tool_failure("not_authorized", "Calendar authorization required")
+
+        self.assertFalse(result["ok"])
+        self.assertNotEqual(result["code"], "ok")
+        self.assertIsNone(result["data"])
+
+    def test_calendar_list_helper_handles_invalid_payload(self):
+        result = event_list_result(
+            200,
+            ["not", "an", "object"],
+            empty_message="No events",
+            heading="Events",
+        )
+
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["code"], "invalid_response")
+
+    def test_calendar_event_helper_returns_event_data(self):
+        event = {"id": "event-1", "summary": "Meeting"}
+
+        result = event_result(200, {"event": event}, "event-1")
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["data"]["event"], event)
+
+    def test_memory_path_isolated_and_rejects_traversal(self):
+        self.assertEqual(user_memory_path(42), "/memory/users/42/AGENTS.md")
+        with self.assertRaises(ValueError):
+            normalize_memory_user_id("../../42")
+
+    def test_observability_removes_sensitive_fields(self):
+        with patch("utils.observability.logger.info") as log_info:
+            emit_event(
+                "auth.attempt",
+                code="12345678",
+                password="secret",
+                user_id=42,
+            )
+
+        payload = json.loads(log_info.call_args.args[1])
+        self.assertEqual(payload["user_id"], 42)
+        self.assertNotIn("code", payload)
+        self.assertNotIn("password", payload)
+
+    def test_timed_event_emits_completion_duration(self):
+        with patch("utils.observability.emit_event") as emit:
+            with timed_event("test.operation", user_id=42):
+                pass
+
+        emit.assert_called_once()
+        self.assertEqual(emit.call_args.args[0], "test.operation.completed")
+        self.assertIn("duration_ms", emit.call_args.kwargs)
+
+
+if __name__ == "__main__":
+    unittest.main()
