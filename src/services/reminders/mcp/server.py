@@ -32,10 +32,11 @@ def get_current_time(user_timezone: str = "UTC") -> str:
 
 @mcp.tool(description="Schedule a reminder. Always call get_current_time first to know the current time in user's timezone.")
 async def create_reminder(
-    tg_id: int,
+    user_id: str,
     text: str,
     remind_at: str,
     user_timezone: str = "UTC",
+    channel: str = "telegram",
 ) -> str:
     """
     Args:
@@ -66,7 +67,7 @@ async def create_reminder(
             return f"❌ Time {remind_at} ({user_timezone}) is in the past. Current local time: {datetime.now(tz).strftime('%Y-%m-%d %H:%M:%S')}"
 
         send_reminder.apply_async(
-            kwargs={"tg_id": tg_id, "text": text},
+            kwargs={"user_id": user_id, "text": text, "channel": channel},
             eta=eta_utc,
         )
 

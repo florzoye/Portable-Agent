@@ -24,6 +24,7 @@ class AgentsFactory(metaclass=AgentsFactoryMeta):
         middleware: MiddlewareFactory | None = None,
         response_format: ResponseFormat | None = None,
         tg_id: int | str | None = None,
+        channel: str = "telegram",
     ):
         self.name = name
         self.model = model
@@ -33,6 +34,7 @@ class AgentsFactory(metaclass=AgentsFactoryMeta):
         self.response_format = response_format
         self.tg_id = tg_id
         self.checkpointer = checkpointer
+        self.channel = channel
 
     def _get_memory_path(self) -> str:
         return f"/memory/users/{self.tg_id}/AGENTS.md"
@@ -46,6 +48,7 @@ class AgentsFactory(metaclass=AgentsFactoryMeta):
             system_prompt=self.system_prompt.get_prompt(
                 memory_path=self._get_memory_path(),
                 tg_id=self.tg_id,
+                channel=self.channel
             ),
             response_format=self.response_format,
             backend=FilesystemBackend(root_dir="/storage", virtual_mode=False),
