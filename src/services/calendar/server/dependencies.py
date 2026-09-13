@@ -1,4 +1,5 @@
 from fastapi import HTTPException
+from sqlalchemy.exc import SQLAlchemyError
 from db.database import global_db_manager
 from src.factories import ServiceFactory
 from src.exceptions import CalendarServiceException, UserRepositoryException, TokenRepositoryException
@@ -12,7 +13,7 @@ async def get_calendar_service():
             raise
         except CalendarServiceException:
             raise
-        except Exception as exp:
+        except (OSError, TimeoutError, ValueError, SQLAlchemyError) as exp:
             raise CalendarServiceException(original_error=exp)
 
 async def get_users_repo():
@@ -23,7 +24,7 @@ async def get_users_repo():
             raise
         except UserRepositoryException:
             raise
-        except Exception as exp:
+        except (OSError, TimeoutError, ValueError, SQLAlchemyError) as exp:
             raise UserRepositoryException(original_error=exp)
 
 async def get_tokens_repo():
@@ -34,5 +35,5 @@ async def get_tokens_repo():
             raise
         except TokenRepositoryException:
             raise
-        except Exception as exp:
+        except (OSError, TimeoutError, ValueError, SQLAlchemyError) as exp:
             raise TokenRepositoryException(original_error=exp)
