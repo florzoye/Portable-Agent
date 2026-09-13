@@ -10,8 +10,8 @@ class CreateEventRequest(BaseModel):
     end_time: datetime = Field(..., example="2026-02-20T11:00:00+00:00")
     description: Optional[str] = Field(None, example="Discussion of the project")
     location: Optional[str] = Field(None, example="Zoom")
-    timezone: str = Field("UTC", example="Asia/Krasnoyarsk") 
-    attendees: Optional[list[str]] = Field(None) 
+    timezone: str = Field("UTC", min_length=1, max_length=64, example="Asia/Krasnoyarsk")
+    attendees: Optional[list[str]] = Field(None, max_length=50)
 
 class EventDateTime(BaseModel):
     day: Optional[date] = Field(None, alias="date")
@@ -46,7 +46,7 @@ class UpdateEventRequest(BaseModel):
     description: Optional[str] = None
     location: Optional[str] = None
     attendees: Optional[list[str]] = None
-    timezone: str = "UTC"
+    timezone: str = Field("UTC", min_length=1, max_length=64)
 
     @field_validator("end_time")
     @classmethod
@@ -61,14 +61,21 @@ class EventResponse(BaseModel):
 
 class SearchEventsRequest(BaseModel):
     user_id: int
-    query: str
-    days_ahead: int = 30
+    query: str = Field(..., min_length=1, max_length=200)
+    days_ahead: int = Field(30, ge=0, le=90)
 
 
 class EventsRangeRequest(BaseModel):
     user_id: int
     start: datetime
     end: datetime
+
+    @field_validator("start", "end")
+    @classmethod
+    def require_timezone(cls, value):
+        if value.tzinfo is None:
+            raise ValueError("datetime must include a timezone")
+        return value
 
     @field_validator("end")
     @classmethod

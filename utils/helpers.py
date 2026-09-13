@@ -52,7 +52,7 @@ class DateTimeNormalizer:
     def normalize_expiry_for_db(expiry: Optional[datetime]) -> Optional[datetime]:
         """aware → naive UTC before saving to the database"""
         if expiry and expiry.tzinfo is not None:
-            return expiry.replace(tzinfo=None)
+            return expiry.astimezone(timezone.utc).replace(tzinfo=None)
         return expiry
 
     @staticmethod

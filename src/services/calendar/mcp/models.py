@@ -1,17 +1,17 @@
 from typing import Optional
 from datetime import datetime
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 
 class CreateEventParams(BaseModel):
     user_id: int
-    title: str
+    title: str = Field(..., min_length=1, max_length=200)
     start_time: datetime
     end_time: datetime
     description: Optional[str] = None
     location: Optional[str] = None
     attendees: Optional[list[str]] = None
-    timezone: str = "UTC"
+    timezone: str = Field("UTC", min_length=1, max_length=64)
 
     @field_validator("end_time")
     @classmethod
@@ -28,13 +28,20 @@ class UpdateEventParams(BaseModel):
     end_time: Optional[datetime] = None
     description: Optional[str] = None
     location: Optional[str] = None
-    timezone: str = "UTC"
+    timezone: str = Field("UTC", min_length=1, max_length=64)
 
 
 class EventsRangeParams(BaseModel):
     user_id: int
     start: datetime
     end: datetime
+
+    @field_validator("start", "end")
+    @classmethod
+    def require_timezone(cls, value):
+        if value.tzinfo is None:
+            raise ValueError("datetime must include a timezone")
+        return value
 
     @field_validator("end")
     @classmethod
