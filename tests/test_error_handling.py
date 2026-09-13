@@ -74,8 +74,8 @@ class ErrorHandlingTests(unittest.IsolatedAsyncioTestCase):
     async def test_invalid_timezone_falls_back_to_utc(self):
         result = get_current_time("Not/A_Timezone")
 
-        self.assertIn("Current time in UTC:", result)
-        self.assertIn("UTC offset: +0000", result)
+        self.assertIn("Current time in UTC:", result["message"])
+        self.assertIn("UTC offset: +0000", result["message"])
 
     async def test_invalid_reminder_datetime_returns_safe_error(self):
         result = await create_reminder(
@@ -84,10 +84,8 @@ class ErrorHandlingTests(unittest.IsolatedAsyncioTestCase):
             remind_at="not-a-datetime",
         )
 
-        self.assertEqual(
-            result,
-            "❌ Failed to set reminder. Check the time and timezone.",
-        )
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["code"], "invalid_reminder")
 
     async def test_past_followup_is_not_scheduled(self):
         with patch(
@@ -99,7 +97,8 @@ class ErrorHandlingTests(unittest.IsolatedAsyncioTestCase):
                 followup_at="2000-01-01T00:00:00+00:00",
             )
 
-        self.assertIn("is in the past", result)
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["code"], "past_time")
         apply_async.assert_not_called()
 
     async def test_token_cipher_round_trip_and_invalid_token(self):
@@ -204,6 +203,28 @@ class ErrorHandlingTests(unittest.IsolatedAsyncioTestCase):
     def test_web_login_code_rejects_invalid_value(self):
         with self.assertRaises(ValueError):
             normalize_login_code("1234")
+
+    def test_tool_result_has_stable_success_and_failure_shape(self):
+        from src.services.tool_result import tool_failure, tool_success
+
+        self.assertEqual(
+            tool_success("created", {"id": "event-1"}),
+            {
+                "ok": True,
+                "code": "ok",
+                "message": "created",
+                "data": {"id": "event-1"},
+            },
+        )
+        self.assertEqual(
+            tool_failure("not_found", "missing"),
+            {
+                "ok": False,
+                "code": "not_found",
+                "message": "missing",
+                "data": None,
+            },
+        )
 
     def test_web_login_code_uses_scoped_redis_keys(self):
         self.assertEqual(login_code_key("12345678"), "web_login_code:12345678")

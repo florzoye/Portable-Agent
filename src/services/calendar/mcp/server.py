@@ -6,6 +6,7 @@ from src.services.calendar.mcp.models import (
     EventsRangeParams
 )
 from utils.const import MCP_CALENDAR_PORT
+from src.services.tool_result import tool_failure, tool_success
 
 mcp = FastMCP(name="Google Calendar", port=MCP_CALENDAR_PORT, host="0.0.0.0")
 
@@ -54,7 +55,7 @@ async def get_user_info(tg_id: str) -> str:
 # TOOLS
 
 @mcp.tool(description="Get user's upcoming events from Google Calendar")
-async def get_events(tg_id: int, days_ahead: int = 7) -> str:
+async def get_events(tg_id: int, days_ahead: int = 7) -> dict:
     async with AsyncHTTPClient() as api:
         status, data = await api.get(
             "/calendar/events",
@@ -62,24 +63,24 @@ async def get_events(tg_id: int, days_ahead: int = 7) -> str:
         )
 
     if status == 401:
-        return "❌The user is not logged into Google Calendar"
+        return tool_failure("not_authorized", "The user is not logged into Google Calendar")
     if status == 404:
-        return "❌ The user was not found"
+        return tool_failure("user_not_found", "The user was not found")
     if status != 200:
-        return f"❌ Server error: {status}"
+        return tool_failure("server_error", f"Server error: {status}", {"status": status})
 
     events = data.get("events", [])
     if not events:
-        return "📭 There are no upcoming events"
+        return tool_success("There are no upcoming events", {"events": []})
 
     lines = [f"📅 Сevents for {days_ahead} days:"]
     for e in events:
         lines.append(format_event(e))
-    return "\n".join(lines)
+    return tool_success("\n".join(lines), {"events": events})
 
 
 @mcp.tool(description="Find events by text (name, description, location)")
-async def search_events(tg_id: int, query: str, days_ahead: int = 30) -> str:
+async def search_events(tg_id: int, query: str, days_ahead: int = 30) -> dict:
     """
     Args:
         tg_id: Telegram ID user
@@ -93,21 +94,21 @@ async def search_events(tg_id: int, query: str, days_ahead: int = 30) -> str:
         )
 
     if status == 401:
-        return "❌ The user is not logged in"
+        return tool_failure("not_authorized", "The user is not logged in")
     if status != 200:
-        return f"❌ Server error: {status}"
+        return tool_failure("server_error", f"Server error: {status}", {"status": status})
 
     events = data.get("events", [])
     if not events:
-        return f"🔍No results found for {query}"
+        return tool_success(f"No results found for {query}", {"events": []})
 
     lines = [f"🔍 Events found by «{query}»: {len(events)}"]
     for e in events:
         lines.append(format_event(e))
-    return "\n".join(lines)
+    return tool_success("\n".join(lines), {"events": events})
 
 @mcp.tool(description="Get events for a date range")
-async def get_events_range(tg_id: int, start: str, end: str) -> str:
+async def get_events_range(tg_id: int, start: str, end: str) -> dict:
     if "T" not in start:
         start = f"{start}T00:00:00Z"
     if "T" not in end:
@@ -126,26 +127,26 @@ async def get_events_range(tg_id: int, start: str, end: str) -> str:
         )
 
     if status == 401:
-        return "❌ The user is not authorized in Google Calendar"
+        return tool_failure("not_authorized", "The user is not authorized in Google Calendar")
 
     if status != 200:
-        return f"❌ Calendar service error ({status})"
+        return tool_failure("server_error", f"Calendar service error ({status})", {"status": status})
 
     if not isinstance(data, dict):
-        return "❌ Incorrect response from calendar service"
+        return tool_failure("invalid_response", "Incorrect response from calendar service")
 
     events = data.get("events", [])
     if not events:
-        return f"📭Not Events with {start} to {end}"
+        return tool_success(f"No events from {start} to {end}", {"events": []})
 
     lines = [f"📅 Events from {start} to {end}: {len(events)} events"]
     for e in events:
         lines.append(format_event(e))
-    return "\n".join(lines)
+    return tool_success("\n".join(lines), {"events": events})
 
 
 @mcp.tool(description="Get detailed information about an event by its ID")
-async def get_event(tg_id: int, event_id: str) -> str:
+async def get_event(tg_id: int, event_id: str) -> dict:
     """
     Args:
         tg_id: Telegram ID user
@@ -158,16 +159,19 @@ async def get_event(tg_id: int, event_id: str) -> str:
         )
 
     if status == 401:
-        return "❌ User is not authorized"
+        return tool_failure("not_authorized", "User is not authorized")
     if status == 404:
-        return f"❌ Event {event_id} not found"
+        return tool_failure("event_not_found", f"Event {event_id} not found")
     if status != 200:
-        return f"❌ Server error: {status}"
+        return tool_failure("server_error", f"Server error: {status}", {"status": status})
 
-    return format_event(data.get("event", {}))
+    return tool_success(
+        format_event(data.get("event", {})),
+        {"event": data.get("event", {})},
+    )
 
 @mcp.tool(description="Get events for a specific day")
-async def get_events_by_date(tg_id: int, date: str) -> str:
+async def get_events_by_date(tg_id: int, date: str) -> dict:
     payload = EventsRangeParams(
         user_id=tg_id,
         start=f"{date}T00:00:00Z",
@@ -181,22 +185,22 @@ async def get_events_by_date(tg_id: int, date: str) -> str:
         )
 
     if status == 401:
-        return "❌ The user is not authorized in Google Calendar"
+        return tool_failure("not_authorized", "The user is not authorized in Google Calendar")
 
     if status != 200:
-        return f"❌ Calendar service error ({status})"
+        return tool_failure("server_error", f"Calendar service error ({status})", {"status": status})
 
     if not isinstance(data, dict):
-        return "❌ Incorrect response from calendar service"
+        return tool_failure("invalid_response", "Incorrect response from calendar service")
 
     events = data.get("events", [])
     if not events:
-        return f"📭 There are no events on {date}"
+        return tool_success(f"There are no events on {date}", {"events": []})
 
     lines = [f"📅 Events on {date}: {len(events)} events"]
     for e in events:
         lines.append(format_event(e))
-    return "\n".join(lines)
+    return tool_success("\n".join(lines), {"events": events})
 
 @mcp.tool(description="Create a new event in Google Calendar")
 async def create_event(
@@ -208,7 +212,7 @@ async def create_event(
     location: str | None = None,
     attendees: list[str] | None = None,
     timezone: str = "UTC"
-) -> str:
+) -> dict:
     """
     Args:
         tg_id: Telegram user ID
@@ -241,11 +245,14 @@ async def create_event(
         )
 
     if status == 401:
-        return "❌ The user is not logged in"
+        return tool_failure("not_authorized", "The user is not logged in")
     if status != 200:
-        return f"❌ Calendar service error ({status})"
+        return tool_failure("server_error", f"Calendar service error ({status})", {"status": status})
 
-    return format_event(data.get("event", {}))
+    return tool_success(
+        format_event(data.get("event", {})),
+        {"event": data.get("event", {})},
+    )
 
 @mcp.tool(description="Update an existing event in Google Calendar")
 async def update_event(
@@ -258,7 +265,7 @@ async def update_event(
     location: str | None = None,
     attendees: list[str] | None = None,
     timezone: str = "UTC"
-) -> str:
+) -> dict:
     """
     Args:
         tg_id: Telegram user ID
@@ -288,17 +295,20 @@ async def update_event(
         )
 
     if status == 401:
-        return "❌ The user is not logged in"
+        return tool_failure("not_authorized", "The user is not logged in")
     if status == 404:
-        return f"❌ Event {event_id} not found"
+        return tool_failure("event_not_found", f"Event {event_id} not found")
     if status != 200:
-        return f"❌ Server error: {status}"
+        return tool_failure("server_error", f"Server error: {status}", {"status": status})
 
-    return format_event(data.get("event", {}))
+    return tool_success(
+        format_event(data.get("event", {})),
+        {"event": data.get("event", {})},
+    )
 
 
 @mcp.tool(description="Delete an event from Google Calendar by its ID")
-async def delete_event(tg_id: int, event_id: str) -> str:
+async def delete_event(tg_id: int, event_id: str) -> dict:
     """
     Args:
         tg_id: Telegram ID пользователя
@@ -311,17 +321,17 @@ async def delete_event(tg_id: int, event_id: str) -> str:
         )
 
     if status == 401:
-        return "❌ The user is not logged in"
+        return tool_failure("not_authorized", "The user is not logged in")
     if status == 404:
-        return f"❌ Event {event_id} not found"
+        return tool_failure("event_not_found", f"Event {event_id} not found")
     if status != 200:
-        return f"❌ Server error: {status}"
+        return tool_failure("server_error", f"Server error: {status}", {"status": status})
 
-    return f"Event {event_id} has been deleted"
+    return tool_success(f"Event {event_id} has been deleted", {"event_id": event_id})
 
 
 @mcp.tool(description="Get a link to authorize a user in Google Calendar")
-async def get_auth_url(tg_id: int) -> str:
+async def get_auth_url(tg_id: int) -> dict:
     """
     Args:
         tg_id: Telegram ID user
@@ -333,13 +343,16 @@ async def get_auth_url(tg_id: int) -> str:
         )
 
     if status != 200:
-        return f"❌ Failed to retrieve the link: {status}"
+        return tool_failure("server_error", f"Failed to retrieve the link: {status}", {"status": status})
 
-    return f"Authorization link:\n{data.get('auth_url')}"
+    return tool_success(
+        f"Authorization link:\n{data.get('auth_url')}",
+        {"auth_url": data.get("auth_url")},
+    )
 
 
 @mcp.tool(description="Check if the user is authorized in Google Calendar")
-async def check_auth(tg_id: int) -> str:
+async def check_auth(tg_id: int) -> dict:
     """
     Args:
         tg_id: Telegram ID user
@@ -348,13 +361,16 @@ async def check_auth(tg_id: int) -> str:
         status, data = await api.get(f"/calendar/users/{tg_id}")
 
     if status == 401:
-        return "❌ The user is not logged in"
+        return tool_failure("not_authorized", "The user is not logged in")
     if status != 200:
-        return f"❌ Server error: {status}"
+        return tool_failure("server_error", f"Server error: {status}", {"status": status})
 
     authorized = data.get("has_google_token", False)
-    return (
-        f"{'Authorized' if authorized else 'Not authorized'}\n"
-        f"tg_id: {data['tg_id']}\n"
-        f"nick: {data.get('tg_nick', '—')}"
+    return tool_success(
+        (
+            f"{'Authorized' if authorized else 'Not authorized'}\n"
+            f"tg_id: {data['tg_id']}\n"
+            f"nick: {data.get('tg_nick', '—')}"
+        ),
+        {"authorized": authorized, "tg_id": data["tg_id"]},
     )
