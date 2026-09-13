@@ -7,6 +7,11 @@ from src.services.calendar.mcp.models import (
 )
 from utils.const import MCP_CALENDAR_PORT
 from src.services.tool_result import tool_failure, tool_success
+from src.services.calendar.mcp.common import (
+    calendar_request,
+    event_list_result,
+    event_result,
+)
 
 mcp = FastMCP(name="Google Calendar", port=MCP_CALENDAR_PORT, host="0.0.0.0")
 
@@ -56,27 +61,17 @@ async def get_user_info(tg_id: str) -> str:
 
 @mcp.tool(description="Get user's upcoming events from Google Calendar")
 async def get_events(tg_id: int, days_ahead: int = 7) -> dict:
-    async with AsyncHTTPClient() as api:
-        status, data = await api.get(
-            "/calendar/events",
-            params={"tg_id": tg_id, "days_ahead": days_ahead}
-        )
-
-    if status == 401:
-        return tool_failure("not_authorized", "The user is not logged into Google Calendar")
-    if status == 404:
-        return tool_failure("user_not_found", "The user was not found")
-    if status != 200:
-        return tool_failure("server_error", f"Server error: {status}", {"status": status})
-
-    events = data.get("events", [])
-    if not events:
-        return tool_success("There are no upcoming events", {"events": []})
-
-    lines = [f"📅 Сevents for {days_ahead} days:"]
-    for e in events:
-        lines.append(format_event(e))
-    return tool_success("\n".join(lines), {"events": events})
+    status, data = await calendar_request(
+        "get",
+        "/calendar/events",
+        params={"tg_id": tg_id, "days_ahead": days_ahead},
+    )
+    return event_list_result(
+        status,
+        data,
+        empty_message="There are no upcoming events",
+        heading=f"Events for {days_ahead} days:",
+    )
 
 
 @mcp.tool(description="Find events by text (name, description, location)")
@@ -87,25 +82,18 @@ async def search_events(tg_id: int, query: str, days_ahead: int = 30) -> dict:
         query:Search query
         days_ahead: Search depth in days (default is 30)
     """
-    async with AsyncHTTPClient() as api:
-        status, data = await api.get(
-            "/calendar/events/search",
-            params={"tg_id": tg_id, "query": query, "days_ahead": days_ahead}
-        )
+    status, data = await calendar_request(
+        "get",
+        "/calendar/events/search",
+        params={"tg_id": tg_id, "query": query, "days_ahead": days_ahead},
+    )
 
-    if status == 401:
-        return tool_failure("not_authorized", "The user is not logged in")
-    if status != 200:
-        return tool_failure("server_error", f"Server error: {status}", {"status": status})
-
-    events = data.get("events", [])
-    if not events:
-        return tool_success(f"No results found for {query}", {"events": []})
-
-    lines = [f"🔍 Events found by «{query}»: {len(events)}"]
-    for e in events:
-        lines.append(format_event(e))
-    return tool_success("\n".join(lines), {"events": events})
+    return event_list_result(
+        status,
+        data,
+        empty_message=f"No results found for {query}",
+        heading=f"Events found by «{query}»: {len(data.get('events', [])) if isinstance(data, dict) else 0}",
+    )
 
 @mcp.tool(description="Get events for a date range")
 async def get_events_range(tg_id: int, start: str, end: str) -> dict:
@@ -120,29 +108,17 @@ async def get_events_range(tg_id: int, start: str, end: str) -> dict:
         end=end
     )
 
-    async with AsyncHTTPClient() as api:
-        status, data = await api.post(
-            "/calendar/events/range",
-            json=payload.model_dump(mode="json")
-        )
-
-    if status == 401:
-        return tool_failure("not_authorized", "The user is not authorized in Google Calendar")
-
-    if status != 200:
-        return tool_failure("server_error", f"Calendar service error ({status})", {"status": status})
-
-    if not isinstance(data, dict):
-        return tool_failure("invalid_response", "Incorrect response from calendar service")
-
-    events = data.get("events", [])
-    if not events:
-        return tool_success(f"No events from {start} to {end}", {"events": []})
-
-    lines = [f"📅 Events from {start} to {end}: {len(events)} events"]
-    for e in events:
-        lines.append(format_event(e))
-    return tool_success("\n".join(lines), {"events": events})
+    status, data = await calendar_request(
+        "post",
+        "/calendar/events/range",
+        payload=payload.model_dump(mode="json"),
+    )
+    return event_list_result(
+        status,
+        data,
+        empty_message=f"No events from {start} to {end}",
+        heading=f"Events from {start} to {end}: {len(data.get('events', [])) if isinstance(data, dict) else 0} events",
+    )
 
 
 @mcp.tool(description="Get detailed information about an event by its ID")

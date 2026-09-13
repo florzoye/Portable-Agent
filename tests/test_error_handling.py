@@ -226,6 +226,18 @@ class ErrorHandlingTests(unittest.IsolatedAsyncioTestCase):
             },
         )
 
+    def test_calendar_event_list_helper_normalizes_responses(self):
+        from src.services.calendar.mcp.common import event_list_result
+
+        result = event_list_result(
+            200,
+            {"events": []},
+            empty_message="No events",
+            heading="Events",
+        )
+
+        self.assertEqual(result["code"], "ok")
+        self.assertEqual(result["data"], {"events": []})
     def test_web_login_code_uses_scoped_redis_keys(self):
         self.assertEqual(login_code_key("12345678"), "web_login_code:12345678")
         self.assertEqual(
