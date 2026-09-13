@@ -49,10 +49,32 @@ class AgentInvoker:
                 config=config,
                 version="v2",
             ):
+                if event.get("event") == "on_tool_start":
+                    emit_event(
+                        "agent.tool.started",
+                        user_id=self.user_id,
+                        tool=event.get("name"),
+                    )
+                elif event.get("event") == "on_tool_end":
+                    emit_event(
+                        "agent.tool.completed",
+                        user_id=self.user_id,
+                        tool=event.get("name"),
+                    )
                 if event.get("event") != "on_chat_model_stream":
                     continue
 
                 chunk = event["data"]["chunk"]
+                usage = getattr(chunk, "usage_metadata", None) or {}
+                if usage:
+                    emit_event(
+                        "agent.token_usage",
+                        user_id=self.user_id,
+                        model=getattr(chunk, "response_metadata", {}).get("model_name"),
+                        input_tokens=usage.get("input_tokens", 0),
+                        output_tokens=usage.get("output_tokens", 0),
+                        total_tokens=usage.get("total_tokens", 0),
+                    )
                 token: str = chunk.content if hasattr(chunk, "content") else str(chunk)
 
                 # Пропускаем пустые токены и tool_call чанки 
@@ -61,6 +83,7 @@ class AgentInvoker:
 
                 if sender is not None:
                     await sender.send_chunk(token)
+
 
             if sender is not None:
                 await sender.send_done()
@@ -107,7 +130,11 @@ class AgentInvoker:
         messages = [{"role": "user", "content": user_message}]
         config = self._build_config(runnable_config)
         started = time.perf_counter()
-        emit_event("agent.invoke.started", user_id=self.user_id)
+        emit_event(
+            "agent.invoke.started",
+            user_id=self.user_id,
+            model=getattr(llm, "model", None) or getattr(llm, "model_name", None),
+        )
 
         if self._supports_streaming(llm):
             text, ok = await self._stream_tokens(messages, config, sender)

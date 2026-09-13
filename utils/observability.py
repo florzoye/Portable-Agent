@@ -1,10 +1,36 @@
 import json
+import asyncio
+import os
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import Any
 
 from loguru import logger
+
+
+def _monitoring_url() -> str | None:
+    value = os.environ.get("MONITORING_URL", "").strip()
+    return value.rstrip("/") if value else None
+
+
+async def _send_to_monitoring(payload: dict[str, Any]) -> None:
+    url = _monitoring_url()
+    if not url:
+        return
+    import aiohttp
+
+    try:
+        timeout = aiohttp.ClientTimeout(total=1)
+        headers = {}
+        api_key = os.environ.get("MONITORING_API_KEY", "").strip()
+        if api_key:
+            headers["X-Monitoring-Key"] = api_key
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.post(f"{url}/events", json=payload, headers=headers):
+                return
+    except (aiohttp.ClientError, asyncio.TimeoutError, OSError):
+        logger.debug("Monitoring service is unavailable")
 
 
 def emit_event(name: str, **fields: Any) -> None:
@@ -18,6 +44,11 @@ def emit_event(name: str, **fields: Any) -> None:
         default=str,
         sort_keys=True,
     ))
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        return
+    loop.create_task(_send_to_monitoring({"event": name, **safe_fields}))
 
 
 @contextmanager

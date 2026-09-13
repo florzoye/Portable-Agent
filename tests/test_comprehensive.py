@@ -118,6 +118,32 @@ class ComprehensiveTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(emit.call_args.args[0], "test.operation.completed")
         self.assertIn("duration_ms", emit.call_args.kwargs)
 
+    async def test_monitoring_ingest_and_stats(self):
+        from src.services.monitoring import app as monitoring
+
+        monitoring.EVENTS.clear()
+        monitoring.COUNTERS.clear()
+        monitoring.TOKENS.clear()
+        await monitoring.ingest(monitoring.MonitoringEvent(
+            event="agent.invoke.completed",
+            model="test-model",
+            total_tokens=12,
+        ))
+        result = await monitoring.stats()
+
+        self.assertEqual(result["events"]["agent.invoke.completed"], 1)
+        self.assertEqual(result["tokens_by_model"]["test-model"], 12)
+
+    async def test_monitoring_rejects_invalid_api_key(self):
+        from src.services.monitoring import app as monitoring
+
+        with patch.dict("os.environ", {"MONITORING_API_KEY": "expected"}):
+            with self.assertRaises(Exception):
+                await monitoring.ingest(
+                    monitoring.MonitoringEvent(event="test"),
+                    x_monitoring_key="wrong",
+                )
+
 
 if __name__ == "__main__":
     unittest.main()

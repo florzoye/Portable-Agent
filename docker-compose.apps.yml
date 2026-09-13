@@ -1,4 +1,14 @@
 services:
+  monitoring:
+    build: .
+    command: uv run python -m src.services.monitoring.run
+    env_file: .env
+    ports:
+      - "8010:8010"
+    networks:
+      - app-net
+    restart: unless-stopped
+
   telegram-bot:
     build: .
     command: uv run python -m src.services.telegram.bot.main
@@ -8,6 +18,7 @@ services:
       MCP_CALENDAR_PORT: 8002
       MCP_REMINDERS_HOST: mcp-reminders
       MCP_REMINDERS_PORT: 8003
+      MONITORING_URL: http://monitoring:8010
     volumes:
       - agent-storage:/storage
     networks:
@@ -28,6 +39,7 @@ services:
       MCP_CALENDAR_PORT: 8002
       MCP_REMINDERS_HOST: mcp-reminders
       MCP_REMINDERS_PORT: 8003
+      MONITORING_URL: http://monitoring:8010
     volumes:
       - agent-storage:/storage
     networks:

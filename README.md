@@ -242,6 +242,13 @@ To create a one-time Web UI login code, send `/web` to the Telegram bot.
 Enter the received 8-digit code on the Web UI within five minutes. Each code
 is accepted only once.
 
+### Monitoring
+
+The monitoring service is available at `http://localhost:8010` in dev mode.
+Use `/health` for a health check and `/stats` for aggregated events, model
+usage, token counts, and recent activity. Set `MONITORING_API_KEY` to protect
+the endpoints and forward events securely from the application services.
+
 ---
 
 ## 📁 Project Structure
