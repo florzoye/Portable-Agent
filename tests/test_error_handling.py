@@ -238,6 +238,17 @@ class ErrorHandlingTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(result["code"], "ok")
         self.assertEqual(result["data"], {"events": []})
+
+    def test_reminder_datetime_helper_applies_timezone_and_utc_conversion(self):
+        from src.services.reminders.mcp.common import parse_scheduled_datetime
+
+        scheduled, _, timezone_name = parse_scheduled_datetime(
+            "2026-01-01T12:00:00",
+            "Europe/Moscow",
+        )
+
+        self.assertEqual(timezone_name, "Europe/Moscow")
+        self.assertEqual(scheduled.astimezone(timezone.utc).hour, 9)
     def test_web_login_code_uses_scoped_redis_keys(self):
         self.assertEqual(login_code_key("12345678"), "web_login_code:12345678")
         self.assertEqual(

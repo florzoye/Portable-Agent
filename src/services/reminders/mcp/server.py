@@ -1,10 +1,9 @@
 from datetime import datetime, timezone
-from zoneinfo import ZoneInfo
-from zoneinfo import ZoneInfoNotFoundError
 from mcp.server.fastmcp import FastMCP
 from loguru import logger
 from utils.const import MCP_REMINDERS_PORT
 from src.services.tool_result import tool_failure, tool_success
+from src.services.reminders.mcp.common import parse_scheduled_datetime, resolve_timezone
 
 mcp = FastMCP(name="Reminders", port=MCP_REMINDERS_PORT, host="0.0.0.0")
 
@@ -15,11 +14,7 @@ def get_current_time(user_timezone: str = "UTC") -> str:
     Args:
         user_timezone: IANA timezone name from user memory (e.g. 'Asia/Krasnoyarsk', 'Europe/Moscow'). Use UTC if unknown.
     """
-    try:
-        tz = ZoneInfo(user_timezone)
-    except (ZoneInfoNotFoundError, ValueError):
-        tz = timezone.utc
-        user_timezone = "UTC"
+    tz, user_timezone = resolve_timezone(user_timezone)
 
     now_local = datetime.now(tz)
     now_utc = datetime.now(timezone.utc)
@@ -57,16 +52,7 @@ async def create_reminder(
     from src.tasks.tasks import send_reminder
 
     try:
-        try:
-            tz = ZoneInfo(user_timezone)
-        except ZoneInfoNotFoundError:
-            tz = timezone.utc
-            user_timezone = "UTC"
-
-        eta = datetime.fromisoformat(remind_at)
-        if eta.tzinfo is None:
-            eta = eta.replace(tzinfo=tz)
-
+        eta, tz, user_timezone = parse_scheduled_datetime(remind_at, user_timezone)
         eta_utc = eta.astimezone(timezone.utc)
         now_utc = datetime.now(timezone.utc)
 
@@ -115,15 +101,7 @@ async def create_followup(
     from src.tasks.tasks import followup_after_event
 
     try:
-        try:
-            tz = ZoneInfo(user_timezone)
-        except ZoneInfoNotFoundError:
-            tz = timezone.utc
-
-        eta = datetime.fromisoformat(followup_at)
-        if eta.tzinfo is None:
-            eta = eta.replace(tzinfo=tz)
-
+        eta, _, user_timezone = parse_scheduled_datetime(followup_at, user_timezone)
         eta_utc = eta.astimezone(timezone.utc)
         now_utc = datetime.now(timezone.utc)
 
