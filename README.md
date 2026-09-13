@@ -25,9 +25,9 @@ A modular AI-powered assistant with Google Calendar integration, LangGraph agent
 ## Architecture
 
 ```
-┌──────────────────────┐    ┌──────────────────────┐
+┌──────────────────────┐    ┌───────────────────────┐
 │    Telegram Bot      │    │    Web Assistant      │
-│  (aiogram + agent)   │    │  (FastAPI + WS + UI)  │
+│     (aiogram)        │    │  (FastAPI + WS + UI)  │
 └────────┬─────────────┘    └──────────┬────────────┘
          │                             │
          └──────────────┬──────────────┘
@@ -37,17 +37,17 @@ A modular AI-powered assistant with Google Calendar integration, LangGraph agent
            │   (ReAct + MCP tools)   │
            └──────┬──────────┬───────┘
                   │          │
-     ┌────────────▼──┐  ┌────▼─────────────┐
-     │  MCP Calendar │  │  MCP Reminders   │
-     │  (port 8002)  │  │  (port 8003)     │
-     └───────┬───────┘  └────────┬─────────┘
-             │                   │
-     ┌───────▼───────┐  ┌────────▼─────────┐
-     │FastAPI Calendar│ │  Celery Worker   │
-     │  (port 8001)  │  │  + Celery Beat   │
-     └───────┬───────┘  └────────┬─────────┘
-             │                   │
-     ┌───────▼───────────────────▼──────────┐
+     ┌────────────▼──┐  ┌────▼──────────────┐
+     │  MCP Calendar │  │  MCP Reminders    │
+     │  (port 8002)  │  │  (port 8003)      │
+     └───────┬───────┘  └─────────┬─────────┘
+             │                    │
+     ┌───────▼────────┐  ┌────────▼─────────┐
+     │FastAPI Calendar│  │  Celery Worker   │
+     │  (port 8001)   │  │  + Celery Beat   │
+     └───────┬────────┘  └────────┬─────────┘
+             │                    │
+     ┌───────▼────────────────────▼─────────┐
      │         PostgreSQL + Redis           │
      └──────────────────────────────────────┘
 ```
