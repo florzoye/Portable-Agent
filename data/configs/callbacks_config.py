@@ -5,6 +5,7 @@ from .base_config import BaseConfig
 from langfuse import Langfuse, get_client
 from langfuse.langchain import CallbackHandler
 from langchain_core.callbacks.base import BaseCallbackHandler
+from loguru import logger
 
 
 class LangFuseConfig(BaseConfig):
@@ -75,5 +76,5 @@ class GlobalCallbacksService:
             self.langfuse_handler = CallbackHandler()
             self.callbacks.append(self.langfuse_handler)
 
-        except Exception:
-            pass
+        except (OSError, RuntimeError, ValueError) as exc:
+            logger.warning(f"Langfuse initialization failed; continuing without tracing: {exc}")
