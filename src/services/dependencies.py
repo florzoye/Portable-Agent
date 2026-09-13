@@ -35,4 +35,5 @@ async def get_agent(session_id: str) -> CompiledStateGraph:
         system_prompt=AgentSystemPrompt(),
         checkpointer=checkpointer,
         tg_id=session_id,
+        channel='web'
     ).aget_agent()
