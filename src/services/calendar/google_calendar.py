@@ -57,7 +57,8 @@ class GoogleCalendarService:
         end_time: datetime,
         description: Optional[str] = None,
         location: Optional[str] = None,
-        timezone: str = "UTC"
+        timezone: str = "UTC",
+        attendees: Optional[list[str]] = None,
     ) -> dict:
         return await self.calendar.create_event(
             tg_id=tg_id,
@@ -66,7 +67,8 @@ class GoogleCalendarService:
             end_time=end_time,
             description=description,
             location=location,
-            timezone=timezone
+            timezone=timezone,
+            attendees=attendees,
         )
 
     async def update_event(
@@ -78,7 +80,8 @@ class GoogleCalendarService:
         end_time: Optional[datetime] = None,
         description: Optional[str] = None,
         location: Optional[str] = None,
-        timezone: str = "UTC"
+        timezone: str = "UTC",
+        attendees: Optional[list[str]] = None,
     ) -> dict:
         return await self.calendar.update_event(
             tg_id=tg_id,
@@ -88,7 +91,8 @@ class GoogleCalendarService:
             end_time=end_time,
             description=description,
             location=location,
-            timezone=timezone
+            timezone=timezone,
+            attendees=attendees,
         )
 
     async def delete_event(self, tg_id: int, event_id: str) -> bool:

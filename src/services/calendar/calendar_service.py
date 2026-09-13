@@ -8,6 +8,7 @@ from src.services.calendar.creds_manager import CredentialsManager
 
 from utils.helpers import preprocess_event_data
 from db.database_protocol import UsersBase, GoogleTokensBase
+from src.exceptions.services_exp import CalendarServiceException
 
 class CalendarService:
     def __init__(
@@ -22,7 +23,12 @@ class CalendarService:
         self.logger = logging.getLogger(self.__class__.__name__)
 
     async def _get_user(self, tg_id: int):
-        return await self.users_repo.get_user_by_tg_id(tg_id)
+        user = await self.users_repo.get_user_by_tg_id(tg_id)
+        if user is None:
+            raise CalendarServiceException(
+                message=f"Calendar user {tg_id} was not found"
+            )
+        return user
 
     async def get_events(
         self,
@@ -70,7 +76,8 @@ class CalendarService:
         end_time: datetime,
         description: Optional[str] = None,
         location: Optional[str] = None,
-        timezone: str = "UTC"
+        timezone: str = "UTC",
+        attendees: Optional[list[str]] = None,
     ) -> dict:
         user = await self._get_user(tg_id)
         service = await self.credentials_manager.get_service(user.id)
@@ -85,6 +92,8 @@ class CalendarService:
             event_body["description"] = description
         if location:
             event_body["location"] = location
+        if attendees:
+            event_body["attendees"] = [{"email": email} for email in attendees]
 
         result = await self.credentials_manager._run_sync(
             service.events().insert(
@@ -104,7 +113,8 @@ class CalendarService:
         end_time: Optional[datetime] = None,
         description: Optional[str] = None,
         location: Optional[str] = None,
-        timezone: str = "UTC"
+        timezone: str = "UTC",
+        attendees: Optional[list[str]] = None,
     ) -> dict:
         user = await self._get_user(tg_id)
         service = await self.credentials_manager.get_service(user.id)
@@ -127,11 +137,30 @@ class CalendarService:
         if end_time:
             current["end"] = {"dateTime": end_time.isoformat(), "timeZone": timezone}
 
+        new_start = start_time or _event_datetime(current.get("start"))
+        new_end = end_time or _event_datetime(current.get("end"))
+        if new_start and new_end and new_end <= new_start:
+            raise ValueError("end_time must be after start_time")
+
+        patch_body = {}
+        if title is not None:
+            patch_body["summary"] = title
+        if description is not None:
+            patch_body["description"] = description
+        if location is not None:
+            patch_body["location"] = location
+        if start_time is not None:
+            patch_body["start"] = {"dateTime": start_time.isoformat(), "timeZone": timezone}
+        if end_time is not None:
+            patch_body["end"] = {"dateTime": end_time.isoformat(), "timeZone": timezone}
+        if attendees is not None:
+            patch_body["attendees"] = [{"email": email} for email in attendees]
+
         result = await self.credentials_manager._run_sync(
-            service.events().update(
+            service.events().patch(
                 calendarId="primary",
                 eventId=event_id,
-                body=current
+                body=patch_body
             ).execute
         )
         self.logger.info(f"Updated event {event_id} for tg_id={tg_id}")
@@ -174,6 +203,13 @@ class CalendarService:
         )
         self.logger.info(f"Search '{query}' for tg_id={tg_id}: {len(result.get('items', []))} results")
         return preprocess_event_data(result.get("items", []))
+
+
+def _event_datetime(value: Optional[dict]) -> Optional[datetime]:
+    if not value:
+        return None
+    raw = value.get("dateTime")
+    return datetime.fromisoformat(raw.replace("Z", "+00:00")) if raw else None
 
     async def get_events_range(self, tg_id: int, start: datetime, end: datetime) -> list[EventModel]:
         user = await self._get_user(tg_id)

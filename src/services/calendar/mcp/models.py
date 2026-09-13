@@ -28,6 +28,7 @@ class UpdateEventParams(BaseModel):
     end_time: Optional[datetime] = None
     description: Optional[str] = None
     location: Optional[str] = None
+    attendees: Optional[list[str]] = Field(None, max_length=50)
     timezone: str = Field("UTC", min_length=1, max_length=64)
 
 

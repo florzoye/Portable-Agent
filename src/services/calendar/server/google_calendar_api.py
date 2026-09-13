@@ -231,6 +231,7 @@ async def create_event(
             description=data.description,
             location=data.location,
             timezone=data.timezone,
+            attendees=data.attendees,
         )
         return EventResponse(event=event)
     except HTTPException:
@@ -258,6 +259,7 @@ async def update_event(
             description=data.description,
             location=data.location,
             timezone=data.timezone,
+            attendees=data.attendees,
         )
         return EventResponse(event=event)
     except HTTPException:

@@ -256,6 +256,7 @@ async def update_event(
     end_time: str | None = None,
     description: str | None = None,
     location: str | None = None,
+    attendees: list[str] | None = None,
     timezone: str = "UTC"
 ) -> str:
     """
@@ -276,6 +277,7 @@ async def update_event(
         end_time=end_time,
         description=description,
         location=location,
+        attendees=attendees,
         timezone=timezone
     )
 
