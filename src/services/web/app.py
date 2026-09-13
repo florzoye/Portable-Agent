@@ -109,6 +109,14 @@ async def list_models():
     return {"models": _build_model_list()}
 
 
+@app.get("/auth/config")
+async def auth_config():
+    username = get_config().TG_SETTINGS.TELEGRAM_BOT_USERNAME
+    if not username:
+        raise HTTPException(status_code=503, detail="Telegram login is not configured")
+    return {"bot_username": username}
+
+
 class SelectModelRequest(BaseModel):
     model_id: str
 

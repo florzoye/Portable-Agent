@@ -5,6 +5,7 @@ class TelegramSettings(BaseConfig):
     BOT_TOKEN: str
     session_name: str = "tg_session"
     TELEGRAM_PROXY: str | None = None
+    TELEGRAM_BOT_USERNAME: str | None = None
 
     @field_validator("TELEGRAM_PROXY")
     @classmethod
