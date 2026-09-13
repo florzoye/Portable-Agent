@@ -217,6 +217,9 @@ MAX_TOKENS=30000
 TOP_P=0.7
 TIMEOUT=60
 VERBOSE=False
+CONTEXT_TRIGGER_TOKENS=12000
+CONTEXT_KEEP_MESSAGES=12
+CONTEXT_MAX_TOOL_ARG_LENGTH=2000
 
 # Observability (optional)
 LANGSMITH_TRACING=false
@@ -226,6 +229,12 @@ LANGFUSE_SECRET_KEY=your_langfuse_secret
 LANGFUSE_PUBLIC_KEY=your_langfuse_public
 LANGFUSE_BASE_URL=https://cloud.langfuse.com
 ```
+
+Агент автоматически суммирует старые сообщения при приближении к заданному
+пороговому размеру контекста и сохраняет последние сообщения без изменений.
+`CONTEXT_TRIGGER_TOKENS` задаёт порог запуска суммаризации,
+`CONTEXT_KEEP_MESSAGES` — количество последних сообщений, которые сохраняются,
+а `CONTEXT_MAX_TOOL_ARG_LENGTH` ограничивает старые аргументы инструментов.
 
 ---
 
