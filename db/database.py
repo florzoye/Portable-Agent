@@ -3,6 +3,7 @@ from typing import Optional
 from contextlib import asynccontextmanager
 
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.exc import SQLAlchemyError
 
 from db.sqlalchemy.models import Base
 from db.database_protocol import UsersBase, GoogleTokensBase
@@ -39,7 +40,7 @@ class Database:
         try:
             yield session
             await session.commit()
-        except Exception as e:
+        except SQLAlchemyError as e:
             await session.rollback()
             self.logger.error(f"Transaction error: {e}", exc_info=True)
             raise
@@ -86,5 +87,4 @@ class Database:
 
 
 global_db_manager = Database()
-
 
