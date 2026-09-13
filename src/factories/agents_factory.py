@@ -7,7 +7,6 @@ from langgraph.graph.state import CompiledStateGraph
 from deepagents import create_deep_agent
 from deepagents.backends import FilesystemBackend
 from src.agents.prompts.system import AgentSystemPrompt
-from src.agents.middleware import UserContextMiddleware
 from src.factories.middleware_factory import MiddlewareFactory
 
 from utils.metaclasses import AgentsFactoryMeta
@@ -42,10 +41,6 @@ class AgentsFactory(metaclass=AgentsFactoryMeta):
 
     async def aget_agent(self) -> CompiledStateGraph:
         middleware = list(self.middleware.get_middleware()) if self.middleware else []
-        if self.tg_id is not None:
-            middleware.append(
-                UserContextMiddleware(user_id=self.tg_id, channel=self.channel)
-            )
 
         return create_deep_agent(
             name=self.name,
