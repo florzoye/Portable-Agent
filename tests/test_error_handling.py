@@ -19,7 +19,12 @@ from src.models.events import EventsRangeRequest, SearchEventsRequest
 from src.agents.prompts.system import AgentSystemPrompt
 from src.agents.middleware import UserContextMiddleware
 from data.configs.tg_config import TelegramSettings
-from src.services.web.one_time_code import generate_login_code, normalize_login_code
+from src.services.web.one_time_code import (
+    generate_login_code,
+    login_attempt_key,
+    login_code_key,
+    normalize_login_code,
+)
 from src.services.web.app import _get_session_context
 
 
@@ -199,6 +204,13 @@ class ErrorHandlingTests(unittest.IsolatedAsyncioTestCase):
     def test_web_login_code_rejects_invalid_value(self):
         with self.assertRaises(ValueError):
             normalize_login_code("1234")
+
+    def test_web_login_code_uses_scoped_redis_keys(self):
+        self.assertEqual(login_code_key("12345678"), "web_login_code:12345678")
+        self.assertEqual(
+            login_attempt_key("127.0.0.1"),
+            "web_login_attempts:127.0.0.1",
+        )
 
     async def test_web_session_context_returns_server_thread_and_refreshes_ttl(self):
         redis = FakeRedisSession()
