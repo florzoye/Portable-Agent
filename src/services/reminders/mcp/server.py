@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfoNotFoundError
 from mcp.server.fastmcp import FastMCP
 from loguru import logger
 from utils.const import MCP_REMINDERS_PORT
@@ -15,7 +16,7 @@ def get_current_time(user_timezone: str = "UTC") -> str:
     """
     try:
         tz = ZoneInfo(user_timezone)
-    except Exception:
+    except (ZoneInfoNotFoundError, ValueError):
         tz = timezone.utc
         user_timezone = "UTC"
 
@@ -50,7 +51,7 @@ async def create_reminder(
     try:
         try:
             tz = ZoneInfo(user_timezone)
-        except Exception:
+        except ZoneInfoNotFoundError:
             tz = timezone.utc
             user_timezone = "UTC"
 
@@ -74,9 +75,9 @@ async def create_reminder(
         local_str = eta.strftime('%Y-%m-%d %H:%M %Z') if eta.tzinfo else f"{remind_at} ({user_timezone})"
         return f"✅ Reminder set for {local_str}: «{text}»"
 
-    except Exception as e:
-        logger.error(f"create_reminder error: {e}")
-        return f"❌ Failed to set reminder: {e}"
+    except (ValueError, TypeError, OSError):
+        logger.exception("create_reminder failed")
+        return "❌ Failed to set reminder. Check the time and timezone."
 
 
 @mcp.tool(description="Schedule a follow-up message after an event ends.")
@@ -98,7 +99,7 @@ async def create_followup(
     try:
         try:
             tz = ZoneInfo(user_timezone)
-        except Exception:
+        except ZoneInfoNotFoundError:
             tz = timezone.utc
 
         eta = datetime.fromisoformat(followup_at)
@@ -117,5 +118,6 @@ async def create_followup(
         )
         return f"✅ Follow-up after «{event_title}» scheduled for {followup_at} ({user_timezone})"
 
-    except Exception as e:
-        return f"❌ Failed to schedule follow-up: {e}"
+    except (ValueError, TypeError, OSError):
+        logger.exception("create_followup failed")
+        return "❌ Failed to schedule follow-up. Check the time and timezone."
