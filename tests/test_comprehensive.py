@@ -124,12 +124,13 @@ class ComprehensiveTests(unittest.IsolatedAsyncioTestCase):
         monitoring.EVENTS.clear()
         monitoring.COUNTERS.clear()
         monitoring.TOKENS.clear()
-        await monitoring.ingest(monitoring.MonitoringEvent(
-            event="agent.invoke.completed",
-            model="test-model",
-            total_tokens=12,
-        ))
-        result = await monitoring.stats()
+        with patch.dict("os.environ", {"MONITORING_API_KEY": ""}):
+            await monitoring.ingest(monitoring.MonitoringEvent(
+                event="agent.invoke.completed",
+                model="test-model",
+                total_tokens=12,
+            ))
+            result = await monitoring.stats()
 
         self.assertEqual(result["events"]["agent.invoke.completed"], 1)
         self.assertEqual(result["tokens_by_model"]["test-model"], 12)
@@ -143,6 +144,14 @@ class ComprehensiveTests(unittest.IsolatedAsyncioTestCase):
                     monitoring.MonitoringEvent(event="test"),
                     x_monitoring_key="wrong",
                 )
+
+    async def test_monitoring_dashboard_is_available(self):
+        from src.services.monitoring.app import dashboard
+
+        page = await dashboard()
+
+        self.assertIn("PortableAgent Monitoring", page.body.decode())
+        self.assertIn("/stats", page.body.decode())
 
 
 if __name__ == "__main__":

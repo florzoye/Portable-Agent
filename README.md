@@ -245,9 +245,10 @@ is accepted only once.
 ### Monitoring
 
 The monitoring service is available at `http://localhost:8010` in dev mode.
+Open `/dashboard` for cards, event/token charts, and a recent activity table.
 Use `/health` for a health check and `/stats` for aggregated events, model
-usage, token counts, and recent activity. Set `MONITORING_API_KEY` to protect
-the endpoints and forward events securely from the application services.
+usage, token counts, and recent activity. If `MONITORING_API_KEY` is set,
+enter it in the dashboard or send it as the `X-Monitoring-Key` header.
 
 ---
 

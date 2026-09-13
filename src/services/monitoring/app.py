@@ -1,9 +1,11 @@
 import os
 import time
+from pathlib import Path
 from collections import Counter
 from typing import Any
 
 from fastapi import FastAPI, Header, HTTPException
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
 
@@ -27,6 +29,13 @@ class MonitoringEvent(BaseModel):
 
 
 app = FastAPI(title="PortableAgent Monitoring")
+_DASHBOARD_PATH = Path(__file__).with_name("dashboard.html")
+
+
+@app.get("/dashboard", response_class=HTMLResponse)
+async def dashboard():
+    with _DASHBOARD_PATH.open(encoding="utf-8") as dashboard_file:
+        return HTMLResponse(dashboard_file.read())
 
 
 def _authorized(value: str | None) -> None:

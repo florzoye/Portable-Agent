@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>PortableAgent Monitoring</title>
+  <style>
+    :root{color-scheme:dark;font:14px system-ui;background:#0d1117;color:#d7dee8}
+    body{max-width:1200px;margin:0 auto;padding:24px}
+    h1{font-size:24px}.toolbar{display:flex;gap:8px;margin:16px 0}
+    input,button{background:#161b22;border:1px solid #30363d;color:inherit;border-radius:6px;padding:8px 10px}
+    button{cursor:pointer}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+    .card,.panel{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:16px}
+    .value{font-size:26px;font-weight:700;margin-top:6px}.muted{color:#8b949e}
+    .charts{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}
+    .bar{display:flex;align-items:center;gap:8px;margin:9px 0}.bar label{width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .track{height:18px;flex:1;background:#21262d;border-radius:3px;overflow:hidden}.fill{height:100%;background:#388bfd}
+    table{width:100%;border-collapse:collapse;margin-top:12px;font-size:12px}
+    th,td{text-align:left;border-bottom:1px solid #30363d;padding:8px} th{color:#8b949e}
+    .ok{color:#3fb950}.err{color:#f85149}@media(max-width:800px){.grid,.charts{grid-template-columns:1fr 1fr}}
+  </style>
+</head>
+<body>
+  <h1>PortableAgent Monitoring</h1>
+  <div class="muted">Обновление каждые 5 секунд. Тексты сообщений и секреты не отображаются.</div>
+  <div class="toolbar">
+    <input id="key" type="password" placeholder="MONITORING_API_KEY">
+    <button id="refresh">Обновить</button>
+  </div>
+  <section class="grid">
+    <div class="card"><div class="muted">Всего событий</div><div id="total" class="value">—</div></div>
+    <div class="card"><div class="muted">Ошибки</div><div id="errors" class="value">—</div></div>
+    <div class="card"><div class="muted">Всего токенов</div><div id="tokens" class="value">—</div></div>
+    <div class="card"><div class="muted">Последняя активность</div><div id="last" class="value">—</div></div>
+  </section>
+  <section class="charts">
+    <div class="panel"><h2>События</h2><div id="events-chart"></div></div>
+    <div class="panel"><h2>Токены по моделям</h2><div id="tokens-chart"></div></div>
+  </section>
+  <section class="panel" style="margin-top:12px"><h2>Последние действия</h2>
+    <table><thead><tr><th>Время</th><th>Событие</th><th>Модель</th><th>Инструмент</th><th>Длительность</th><th>Токены</th></tr></thead>
+    <tbody id="recent"></tbody></table>
+  </section>
+  <script>
+    const key = document.getElementById("key");
+    key.value = sessionStorage.getItem("monitoring_key") || "";
+    function headers(){ return key.value ? {"X-Monitoring-Key":key.value} : {}; }
+    function drawBars(target, values, formatter){
+      const node=document.getElementById(target); node.innerHTML="";
+      const entries=Object.entries(values||{}).sort((a,b)=>b[1]-a[1]).slice(0,12);
+      const max=Math.max(...entries.map(x=>x[1]),1);
+      entries.forEach(([name,value])=>{
+        node.insertAdjacentHTML("beforeend",`<div class="bar"><label title="${name}">${name}</label><div class="track"><div class="fill" style="width:${value/max*100}%"></div></div><span>${formatter(value)}</span></div>`);
+      });
+      if(!entries.length) node.innerHTML='<span class="muted">Нет данных</span>';
+    }
+    async function refresh(){
+      sessionStorage.setItem("monitoring_key",key.value);
+      const response=await fetch("/stats",{headers:headers()});
+      if(!response.ok){ document.getElementById("last").textContent="Ошибка доступа"; return; }
+      const data=await response.json(), events=data.events||{}, recent=data.recent_events||[];
+      const total=Object.values(events).reduce((a,b)=>a+b,0);
+      const errors=Object.entries(events).filter(([name])=>name.includes("failed")||name.includes("error")).reduce((a,[,b])=>a+b,0);
+      const tokens=Object.values(data.tokens_by_model||{}).reduce((a,b)=>a+b,0);
+      document.getElementById("total").textContent=total;
+      document.getElementById("errors").textContent=errors;
+      document.getElementById("errors").className="value "+(errors?"err":"ok");
+      document.getElementById("tokens").textContent=tokens.toLocaleString();
+      document.getElementById("last").textContent=recent.length?new Date(recent.at(-1).timestamp*1000).toLocaleTimeString():"—";
+      drawBars("events-chart",events,v=>v);
+      drawBars("tokens-chart",data.tokens_by_model,v=>v.toLocaleString());
+      document.getElementById("recent").innerHTML=recent.slice().reverse().map(e=>`<tr><td>${new Date(e.timestamp*1000).toLocaleString()}</td><td>${e.event}</td><td>${e.model||"—"}</td><td>${e.tool||"—"}</td><td>${e.duration_ms?Math.round(e.duration_ms)+" ms":"—"}</td><td>${e.total_tokens||"—"}</td></tr>`).join("");
+    }
+    document.getElementById("refresh").onclick=refresh; refresh(); setInterval(refresh,5000);
+  </script>
+</body>
+</html>
