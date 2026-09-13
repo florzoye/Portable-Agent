@@ -1,5 +1,6 @@
 from fastapi.responses import RedirectResponse
 from fastapi import APIRouter, Request, HTTPException, Depends
+from loguru import logger
 
 from src.services.calendar.google_calendar import GoogleCalendarService
 from src.models import (
@@ -26,8 +27,9 @@ async def auth_url(
         return {"auth_url": url}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to generate auth URL: {e}")
+    except (OSError, TimeoutError, ValueError):
+        logger.exception("Failed to generate auth URL")
+        raise HTTPException(status_code=500, detail="Failed to generate authorization URL")
 
 
 @router.get("/oauth/callback")
@@ -51,8 +53,9 @@ async def oauth_callback(
         return RedirectResponse(url="/calendar/success")
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"OAuth callback failed: {e}")
+    except (OSError, TimeoutError, ValueError):
+        logger.exception("OAuth callback failed")
+        raise HTTPException(status_code=500, detail="OAuth callback failed")
 
 
 @router.delete("/revoke_access")
@@ -67,8 +70,9 @@ async def revoke_access(
         return await status("revoked")
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to revoke access: {e}")
+    except (OSError, TimeoutError, ValueError):
+        logger.exception("Failed to revoke calendar access")
+        raise HTTPException(status_code=500, detail="Failed to revoke calendar access")
 
 
 @router.get("/success")
@@ -82,8 +86,9 @@ async def get_active_users(
     try:
         users = await users_repo.get_all_users()
         return {"users": [{"tg_id": u.tg_id} for u in users]}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get users: {e}")
+    except (OSError, TimeoutError):
+        logger.exception("Failed to get active users")
+        raise HTTPException(status_code=500, detail="Failed to get active users")
     
 #  Users 
 
@@ -102,8 +107,9 @@ async def get_user(
         return UserResponse.model_validate({**user.model_dump(), "has_google_token": has_token})
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get user: {e}")
+    except (OSError, TimeoutError):
+        logger.exception("Failed to get user")
+        raise HTTPException(status_code=500, detail="Failed to get user")
 
 
 @router.post("/users", response_model=UserResponse)
@@ -126,8 +132,9 @@ async def create_user(
         return UserResponse.model_validate({**user.model_dump(), "has_google_token": has_token})
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to create user: {e}")
+    except (OSError, TimeoutError, ValueError):
+        logger.exception("Failed to create user")
+        raise HTTPException(status_code=500, detail="Failed to create user")
 
 
 #  Events 
@@ -147,8 +154,9 @@ async def get_events(
         raise
     except TimeoutError:
         raise HTTPException(status_code=408, detail="Request timeout")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get events: {e}")
+    except (OSError, TimeoutError, ValueError):
+        logger.exception("Failed to get events")
+        raise HTTPException(status_code=500, detail="Failed to get events")
 
 
 @router.get("/events/search", response_model=EventsResponse)
@@ -165,8 +173,9 @@ async def search_events(
         return EventsResponse(events=events)
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Search failed: {e}")
+    except (OSError, TimeoutError, ValueError):
+        logger.exception("Calendar event search failed")
+        raise HTTPException(status_code=500, detail="Calendar event search failed")
 
 
 @router.post("/events/range", response_model=EventsResponse)
@@ -181,8 +190,9 @@ async def get_events_range(
         return EventsResponse(events=events)
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get events range: {e}")
+    except (OSError, TimeoutError, ValueError):
+        logger.exception("Failed to get events range")
+        raise HTTPException(status_code=500, detail="Failed to get events range")
 
 
 @router.get("/events/{event_id}", response_model=EventResponse)
@@ -200,8 +210,9 @@ async def get_event(
         return EventResponse(event=event)
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get event: {e}")
+    except (OSError, TimeoutError, ValueError):
+        logger.exception("Failed to get event")
+        raise HTTPException(status_code=500, detail="Failed to get event")
 
 
 @router.post("/events", response_model=EventResponse)
@@ -224,8 +235,9 @@ async def create_event(
         return EventResponse(event=event)
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to create event: {e}")
+    except (OSError, TimeoutError, ValueError):
+        logger.exception("Failed to create event")
+        raise HTTPException(status_code=500, detail="Failed to create event")
 
 
 @router.patch("/events/{event_id}", response_model=EventResponse)
@@ -250,8 +262,9 @@ async def update_event(
         return EventResponse(event=event)
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to update event: {e}")
+    except (OSError, TimeoutError, ValueError):
+        logger.exception("Failed to update event")
+        raise HTTPException(status_code=500, detail="Failed to update event")
 
 
 @router.delete("/events/{event_id}")
@@ -267,5 +280,6 @@ async def delete_event(
         return await status("deleted")
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to delete event: {e}")
+    except (OSError, TimeoutError, ValueError):
+        logger.exception("Failed to delete event")
+        raise HTTPException(status_code=500, detail="Failed to delete event")
