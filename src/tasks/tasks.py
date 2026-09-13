@@ -1,3 +1,4 @@
+import json
 import asyncio
 from celery import shared_task
 from loguru import logger
@@ -5,6 +6,15 @@ from loguru import logger
 
 def _run(coro):
     return asyncio.run(coro)
+
+async def _send_web(session_id: str, text: str):
+    from data import get_config
+    cfg = get_config()
+
+    await cfg.redis_client.publish(
+        f"ws_push:{session_id}", 
+        json.dumps({"type": "message", "content": text})
+    )
 
 
 async def _send_telegram(tg_id: int, text: str):
@@ -27,7 +37,7 @@ async def _send_telegram(tg_id: int, text: str):
 async def _ask(tg_id: int, content: str) -> str:
     """Invoke the agent for a user and return the response."""
     from src.agents.llms.initializer import LLMInitializer
-    from src.services.telegram.bot.dependencies import get_agent
+    from src.services.dependencies import get_agent
     from data import get_config
 
     await LLMInitializer.initialize()
@@ -45,11 +55,15 @@ async def _ask(tg_id: int, content: str) -> str:
 
 
 @shared_task(name="tasks.send_reminder", bind=True, max_retries=3)
-def send_reminder(self, tg_id: int, text: str):
-    """Send a reminder message to the user via Telegram."""
+def send_reminder(self, user_id: str, text: str, channel: str = "telegram"):
+    """Send a reminder message to the user via Telegram or Web."""
     try:
-        _run(_send_telegram(tg_id, f"🔔 Reminder: {text}"))
-        logger.info(f"Reminder sent to tg_id={tg_id}")
+        payload = f"🔔 Напоминание: {text}"
+        if channel == "web":
+            _run(_send_web(user_id, payload))
+        else:
+            _run(_send_telegram(int(user_id), payload))
+        logger.info(f"Reminder sent to {channel}:{user_id}")
     except Exception as e:
         logger.error(f"Failed to send reminder: {e}")
         raise self.retry(exc=e, countdown=60)

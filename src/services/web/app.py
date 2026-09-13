@@ -1,8 +1,9 @@
 import pathlib
+import asyncio
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi.responses import HTMLResponse 
 from fastapi.staticfiles import StaticFiles
 from loguru import logger
 from pydantic import BaseModel
@@ -14,7 +15,7 @@ from src.agents.tools.calendar import close_calendar_client
 from src.agents.tools.reminders import close_reminders_client
 from src.factories.checkpointer_factory import close_checkpointer, get_checkpointer
 from src.factories.tools_factory import get_tools
-from src.services.web.dependencies import get_agent, get_session_model, set_session_model
+from src.services.dependencies import get_agent, get_session_model, set_session_model
 from utils.renderers import MessageRenderer
 
 STATIC_DIR = pathlib.Path(__file__).parent / "static"
@@ -39,6 +40,20 @@ def _llm_by_id(model_id: str):
             return llm
     return None
 
+async def _redis_listener(session_id: str, websocket: WebSocket):
+    cfg = get_config()
+    pubsub = cfg.redis_client.pubsub()
+    await pubsub.subscribe(f"ws_push:{session_id}")
+    try:
+        async for message in pubsub.listen():
+            if message["type"] != "message":
+                continue
+            await websocket.send_text(message["data"])  
+    except asyncio.CancelledError:
+        pass
+    finally:
+        await pubsub.unsubscribe(f"ws_push:{session_id}")
+        await pubsub.aclose()
 
 class WebSocketSender(StreamSender):
     """Delivers streamed tokens to the client over a WebSocket connection."""
@@ -96,7 +111,7 @@ class SelectModelRequest(BaseModel):
 async def select_model(session_id: str, body: SelectModelRequest):
     llm = _llm_by_id(body.model_id)
     if llm is None:
-        from fastapi import HTTPException
+        
         raise HTTPException(status_code=404, detail=f"Model '{body.model_id}' not found")
     set_session_model(session_id, llm)
     return {"session_id": session_id, "active_model": body.model_id}
@@ -113,6 +128,8 @@ async def websocket_chat(websocket: WebSocket, session_id: str):
     await websocket.accept()
     cfg = get_config()
     logger.info(f"WebSocket connected: session={session_id}")
+
+    listener_task = asyncio.create_task(_redis_listener(session_id, websocket))
 
     try:
         while True:
@@ -145,3 +162,5 @@ async def websocket_chat(websocket: WebSocket, session_id: str):
 
     except WebSocketDisconnect:
         logger.info(f"WebSocket disconnected: session={session_id}")
+    finally:
+        listener_task.cancel()
