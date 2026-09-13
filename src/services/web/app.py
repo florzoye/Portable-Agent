@@ -175,15 +175,23 @@ async def logout(
     response: Response,
     portable_session: str | None = Cookie(default=None),
 ):
-    user_id, thread_id = await _get_session_context(portable_session)
     redis = get_config().redis_client
-    await redis.delete(
-        f"{SESSION_KEY_PREFIX}{portable_session}",
-        f"{SESSION_THREAD_PREFIX}{portable_session}",
-    )
-    clear_session_model(thread_id)
+    if portable_session:
+        thread_id = await redis.get(f"{SESSION_THREAD_PREFIX}{portable_session}")
+        await redis.delete(
+            f"{SESSION_KEY_PREFIX}{portable_session}",
+            f"{SESSION_THREAD_PREFIX}{portable_session}",
+        )
+        if thread_id:
+            clear_session_model(thread_id)
     response.delete_cookie(SESSION_COOKIE)
-    return {"logged_out": True, "user_id": user_id}
+    return {"logged_out": True}
+
+
+@app.get("/auth/me")
+async def current_user(portable_session: str | None = Cookie(default=None)):
+    user_id, _ = await _get_session_context(portable_session)
+    return {"user_id": user_id}
 
 
 @app.post("/session/{session_id}/model")

@@ -303,6 +303,7 @@
       <div class="dot" id="status-dot"></div>
       <span class="session-id" id="session-label">——————</span>
     </div>
+    <button id="logout-button" style="padding:4px 10px;background:#141414;border:1px solid #222;border-radius:20px;color:#777;cursor:pointer">Выйти</button>
   </div>
 </header>
 
@@ -331,7 +332,8 @@
 </footer>
 <div id="auth-screen" style="position:fixed;inset:0;background:#0a0a0a;display:flex;align-items:center;justify-content:center;z-index:10">
   <div style="text-align:center">
-    <p style="color:#aaa;margin-bottom:16px">Введите одноразовый код из Telegram</p>
+    <p style="color:#aaa;margin-bottom:8px">Введите одноразовый код из Telegram</p>
+    <p style="color:#666;font-size:12px;margin-bottom:16px">Отправьте боту команду /web, затем введите код</p>
     <input id="login-code" inputmode="numeric" maxlength="8" placeholder="12345678"
       style="padding:10px;border:1px solid #333;background:#141414;color:#ddd;border-radius:6px;text-align:center">
     <button id="login-button" style="display:block;margin:12px auto;padding:8px 18px">Войти</button>
@@ -359,27 +361,55 @@
   const statusDot   = document.getElementById("status-dot");
   const modelSelect = document.getElementById("model-select");
   const modelTag    = document.getElementById("model-tag");
+  const authScreen = document.getElementById("auth-screen");
+  const authError = document.getElementById("auth-error");
+  const loginButton = document.getElementById("login-button");
+  const logoutButton = document.getElementById("logout-button");
 
   let ws, isWaiting = false, tagTimer = null;
 
   async function loginWithCode() {
-    const code = document.getElementById("login-code").value;
-    const response = await fetch("/auth/code", {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({code}),
-    });
-    if (!response.ok) throw new Error("Неверный или просроченный код");
-    document.getElementById("auth-screen").remove();
-    loadModels();
-    connect();
+    loginButton.disabled = true;
+    try {
+      const code = document.getElementById("login-code").value;
+      const response = await fetch("/auth/code", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({code}),
+      });
+      if (!response.ok) throw new Error("Неверный или просроченный код");
+      startApp();
+    } finally {
+      loginButton.disabled = false;
+    }
   }
 
   document.getElementById("login-button").addEventListener("click", () =>
     loginWithCode().catch(error => {
-      document.getElementById("auth-error").textContent = error.message;
+      authError.textContent = error.message;
     })
   );
+  document.getElementById("login-code").addEventListener("keydown", event => {
+    if (event.key === "Enter") loginButton.click();
+  });
+
+  function showAuth(message = "") {
+    if (!authScreen.isConnected) document.body.appendChild(authScreen);
+    authError.textContent = message;
+    inputEl.disabled = true; sendBtn.disabled = true;
+  }
+
+  function startApp() {
+    authScreen.remove();
+    loadModels();
+    connect();
+  }
+
+  logoutButton.addEventListener("click", async () => {
+    await fetch("/auth/logout", {method: "POST"});
+    if (ws) ws.close();
+    showAuth("Вы вышли из аккаунта");
+  });
 
   // ── Spoiler click handler ─────────────────────────────────────────────────
   document.addEventListener("click", e => {
@@ -395,6 +425,7 @@
         fetch("/models"),
         fetch(`/session/${SESSION_ID}/model`),
       ]);
+      if (curRes.status === 401) throw new Error("AUTH_REQUIRED");
       const { models }       = await modelsRes.json();
       const { active_model } = await curRes.json();
 
@@ -408,7 +439,10 @@
       });
       modelSelect.value    = active_model;
       modelSelect.disabled = false;
-    } catch { modelSelect.style.display = "none"; }
+    } catch (error) {
+      if (error?.message === "AUTH_REQUIRED") showAuth("Сессия истекла, войдите снова");
+      modelSelect.style.display = "none";
+    }
   }
 
   async function applyModel(modelId) {
@@ -419,7 +453,8 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ model_id: modelId }),
       });
-      if (res.ok) flashTag();
+      if (res.status === 401) showAuth("Сессия истекла, войдите снова");
+      else if (res.ok) flashTag();
     } finally { modelSelect.disabled = false; }
   }
 
@@ -440,10 +475,11 @@
       statusDot.classList.add("connected");
       inputEl.disabled = false; sendBtn.disabled = false; inputEl.focus();
     };
-    ws.onclose = () => {
+    ws.onclose = event => {
       statusDot.classList.remove("connected");
       inputEl.disabled = true; sendBtn.disabled = true;
-      setTimeout(connect, 2000);
+      if (event.code === 1008) showAuth("Сессия истекла, войдите снова");
+      else setTimeout(connect, 2000);
     };
     ws.onerror = () => ws.close();
 
@@ -534,6 +570,10 @@
     inputEl.style.height = "auto";
     inputEl.style.height = Math.min(inputEl.scrollHeight, 120) + "px";
   });
+
+  fetch("/auth/me").then(response => {
+    if (response.ok) startApp();
+  }).catch(() => {});
 
 </script>
 </body>
