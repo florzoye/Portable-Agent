@@ -40,6 +40,8 @@ class CalendarService:
 
         now = datetime.now(timezone.utc)
         days = days_ahead if isinstance(days_ahead, int) else days_ahead.value
+        if days < 0 or days > 365:
+            raise ValueError("days_ahead must be between 0 and 365")
         time_max = now + timedelta(days=days)
 
         result: dict = await self.credentials_manager._run_sync(
@@ -189,6 +191,8 @@ class CalendarService:
         service = await self.credentials_manager.get_service(user.id)
 
         now = datetime.now(timezone.utc)
+        if days_ahead < 0 or days_ahead > 90:
+            raise ValueError("days_ahead must be between 0 and 90")
         time_max = now + timedelta(days=days_ahead)
 
         result = await self.credentials_manager._run_sync(

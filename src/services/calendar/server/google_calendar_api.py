@@ -1,5 +1,5 @@
 from fastapi.responses import RedirectResponse
-from fastapi import APIRouter, Request, HTTPException, Depends
+from fastapi import APIRouter, Request, HTTPException, Depends, Query
 from loguru import logger
 
 from src.services.calendar.google_calendar import GoogleCalendarService
@@ -142,7 +142,7 @@ async def create_user(
 @router.get("/events", response_model=EventsResponse, response_model_exclude_none=True)
 async def get_events(
     tg_id: int,
-    days_ahead: int = 7,
+    days_ahead: int = Query(7, ge=0, le=365),
     calendar: GoogleCalendarService = Depends(get_calendar_service)
 ):
     try:
@@ -163,7 +163,7 @@ async def get_events(
 async def search_events(
     tg_id: int,
     query: str,
-    days_ahead: int = 30,
+    days_ahead: int = Query(30, ge=0, le=90),
     calendar: GoogleCalendarService = Depends(get_calendar_service)
 ):
     try:
