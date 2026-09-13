@@ -2,6 +2,7 @@ import asyncio
 import sys
 from loguru import logger
 from aiogram import Bot, Dispatcher
+from aiogram.client.session.aiohttp import AiohttpSession
 from langchain_core.language_models import BaseChatModel
 from aiogram.exceptions import TelegramNetworkError, TelegramAPIError
 
@@ -33,7 +34,8 @@ async def _init_llms() -> tuple:
 async def _run_bot():
     cfg = get_config()
 
-    bot = Bot(token=cfg.TG_SETTINGS.BOT_TOKEN)
+    session = AiohttpSession(proxy=cfg.TG_SETTINGS.TELEGRAM_PROXY)
+    bot = Bot(token=cfg.TG_SETTINGS.BOT_TOKEN, session=session)
     init_telegram_sender(bot)
 
     dp = Dispatcher()

@@ -115,6 +115,15 @@ docker compose \
 - **Web UI**: `http://localhost:8080`
 - **Flower** (Celery monitor): `http://localhost:5555`
 
+If Telegram API is unavailable from your network, configure an HTTP(S) or SOCKS5
+proxy in `.env`:
+
+```env
+TELEGRAM_PROXY=http://user:password@proxy-host:port
+```
+
+Leave `TELEGRAM_PROXY` empty to connect directly.
+
 ---
 
 ## 🐳 Docker Compose Structure
