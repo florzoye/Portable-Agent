@@ -19,6 +19,11 @@ from src.models.events import EventsRangeRequest, SearchEventsRequest
 from src.agents.prompts.system import AgentSystemPrompt
 from src.agents.middleware import UserContextMiddleware
 from data.configs.tg_config import TelegramSettings
+from src.services.web.telegram_auth import (
+    TelegramAuthError,
+    build_init_data,
+    validate_init_data,
+)
 
 
 class FakeResponse:
@@ -173,6 +178,40 @@ class ErrorHandlingTests(unittest.IsolatedAsyncioTestCase):
                 BOT_TOKEN="test-token",
                 TELEGRAM_PROXY="ftp://proxy.example:21",
             )
+
+    def test_telegram_init_data_returns_signed_user(self):
+        fields = {
+            "auth_date": "1760000000",
+            "user": '{"id":42,"first_name":"Test"}',
+        }
+        init_data = build_init_data(fields, "bot-token")
+
+        user = validate_init_data(init_data, "bot-token", now=1760000010)
+
+        self.assertEqual(user["id"], 42)
+
+    def test_telegram_init_data_rejects_tampered_payload(self):
+        fields = {
+            "auth_date": "1760000000",
+            "user": '{"id":42}',
+        }
+        init_data = build_init_data(fields, "bot-token").replace(
+            "%22id%22%3A42",
+            "%22id%22%3A99",
+        )
+
+        with self.assertRaises(TelegramAuthError):
+            validate_init_data(init_data, "bot-token", now=1760000010)
+
+    def test_telegram_init_data_rejects_expired_payload(self):
+        fields = {
+            "auth_date": "1760000000",
+            "user": '{"id":42}',
+        }
+        init_data = build_init_data(fields, "bot-token")
+
+        with self.assertRaises(TelegramAuthError):
+            validate_init_data(init_data, "bot-token", now=1760000000 + 86401)
 
 
 if __name__ == "__main__":
