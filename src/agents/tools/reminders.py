@@ -15,18 +15,26 @@ _stop_event: asyncio.Event | None = None
 async def _session_keeper(ready: asyncio.Event, stop: asyncio.Event) -> None:
     global _reminders_tools
     logger.info(f"Connecting to MCP Reminders: {MCP_REMINDERS_URL}")
-    try:
-        async with sse_client(MCP_REMINDERS_URL) as (read, write):
-            async with ClientSession(read, write) as session:
-                await session.initialize()
-                _reminders_tools = await load_mcp_tools(session)
-                ready.set()
-                await stop.wait()
-    except (OSError, asyncio.TimeoutError, RuntimeError, ValueError):
-        logger.exception("Reminders MCP session error")
-    finally:
-        _reminders_tools = []
-        ready.set()
+    retry_delay = 1
+    while not stop.is_set():
+        try:
+            async with sse_client(MCP_REMINDERS_URL) as (read, write):
+                async with ClientSession(read, write) as session:
+                    await session.initialize()
+                    _reminders_tools = await load_mcp_tools(session)
+                    ready.set()
+                    retry_delay = 1
+                    await stop.wait()
+        except (OSError, asyncio.TimeoutError, RuntimeError, ValueError):
+            logger.exception("Reminders MCP session error; retrying")
+            _reminders_tools = []
+            ready.set()
+            try:
+                await asyncio.wait_for(stop.wait(), timeout=retry_delay)
+            except asyncio.TimeoutError:
+                retry_delay = min(retry_delay * 2, 30)
+        finally:
+            _reminders_tools = []
 
 
 async def init_reminders_client() -> None:
@@ -55,6 +63,7 @@ async def close_reminders_client() -> None:
             await asyncio.wait_for(_keeper_task, timeout=5.0)
         except (asyncio.TimeoutError, asyncio.CancelledError):
             _keeper_task.cancel()
+            await asyncio.gather(_keeper_task, return_exceptions=True)
 
     _keeper_task = None
     _stop_event = None

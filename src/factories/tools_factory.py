@@ -1,6 +1,8 @@
+import asyncio
 from langchain_core.tools import BaseTool
 
 _tools: list[BaseTool] | None = None
+_tools_lock = asyncio.Lock()
 
 
 async def get_tools() -> list[BaseTool]:
@@ -8,14 +10,18 @@ async def get_tools() -> list[BaseTool]:
     if _tools is not None:
         return _tools
 
-    from src.agents.tools.calendar import init_calendar_client, get_calendar_tools
-    from src.agents.tools.reminders import init_reminders_client, get_reminders_tools
+    async with _tools_lock:
+        if _tools is not None:
+            return _tools
 
-    await init_calendar_client()
-    await init_reminders_client()
+        from src.agents.tools.calendar import init_calendar_client, get_calendar_tools
+        from src.agents.tools.reminders import init_reminders_client, get_reminders_tools
 
-    _tools = [
-        *await get_calendar_tools(),
-        *await get_reminders_tools(),
-    ]
-    return _tools   
+        await init_calendar_client()
+        await init_reminders_client()
+
+        _tools = [
+            *await get_calendar_tools(),
+            *await get_reminders_tools(),
+        ]
+        return _tools

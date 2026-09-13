@@ -14,18 +14,26 @@ _stop_event: asyncio.Event | None = None
 
 async def _session_keeper(ready: asyncio.Event, stop: asyncio.Event) -> None:
     global _calendar_client_tools
-    try:
-        async with sse_client(MCP_CALENDAR_URL) as (read, write):
-            async with ClientSession(read, write) as session:
-                await session.initialize()
-                _calendar_client_tools = await load_mcp_tools(session)
-                ready.set()
-                await stop.wait()
-    except (OSError, asyncio.TimeoutError, RuntimeError, ValueError):
-        logger.exception("Calendar MCP session error")
-    finally:
-        _calendar_client_tools = []
-        ready.set()  # удаление кэша
+    retry_delay = 1
+    while not stop.is_set():
+        try:
+            async with sse_client(MCP_CALENDAR_URL) as (read, write):
+                async with ClientSession(read, write) as session:
+                    await session.initialize()
+                    _calendar_client_tools = await load_mcp_tools(session)
+                    ready.set()
+                    retry_delay = 1
+                    await stop.wait()
+        except (OSError, asyncio.TimeoutError, RuntimeError, ValueError):
+            logger.exception("Calendar MCP session error; retrying")
+            _calendar_client_tools = []
+            ready.set()
+            try:
+                await asyncio.wait_for(stop.wait(), timeout=retry_delay)
+            except asyncio.TimeoutError:
+                retry_delay = min(retry_delay * 2, 30)
+        finally:
+            _calendar_client_tools = []
 
 
 async def init_calendar_client() -> None:
@@ -54,6 +62,7 @@ async def close_calendar_client() -> None:
             await asyncio.wait_for(_keeper_task, timeout=5.0)
         except (asyncio.TimeoutError, asyncio.CancelledError):
             _keeper_task.cancel()
+            await asyncio.gather(_keeper_task, return_exceptions=True)
 
     _keeper_task = None
     _stop_event = None
