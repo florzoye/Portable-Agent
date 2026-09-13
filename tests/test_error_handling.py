@@ -21,8 +21,8 @@ from src.agents.middleware import UserContextMiddleware
 from data.configs.tg_config import TelegramSettings
 from src.services.web.telegram_auth import (
     TelegramAuthError,
-    build_init_data,
-    validate_init_data,
+    build_login_widget_data,
+    validate_login_widget,
 )
 
 
@@ -179,39 +179,39 @@ class ErrorHandlingTests(unittest.IsolatedAsyncioTestCase):
                 TELEGRAM_PROXY="ftp://proxy.example:21",
             )
 
-    def test_telegram_init_data_returns_signed_user(self):
+    def test_telegram_login_widget_returns_signed_user(self):
         fields = {
             "auth_date": "1760000000",
             "user": '{"id":42,"first_name":"Test"}',
         }
-        init_data = build_init_data(fields, "bot-token")
+        init_data = build_login_widget_data(fields, "bot-token")
 
-        user = validate_init_data(init_data, "bot-token", now=1760000010)
+        user = validate_login_widget(init_data, "bot-token", now=1760000010)
 
         self.assertEqual(user["id"], 42)
 
-    def test_telegram_init_data_rejects_tampered_payload(self):
+    def test_telegram_login_widget_rejects_tampered_payload(self):
         fields = {
             "auth_date": "1760000000",
             "user": '{"id":42}',
         }
-        init_data = build_init_data(fields, "bot-token").replace(
+        init_data = build_login_widget_data(fields, "bot-token").replace(
             "%22id%22%3A42",
             "%22id%22%3A99",
         )
 
         with self.assertRaises(TelegramAuthError):
-            validate_init_data(init_data, "bot-token", now=1760000010)
+            validate_login_widget(init_data, "bot-token", now=1760000010)
 
-    def test_telegram_init_data_rejects_expired_payload(self):
+    def test_telegram_login_widget_rejects_expired_payload(self):
         fields = {
             "auth_date": "1760000000",
             "user": '{"id":42}',
         }
-        init_data = build_init_data(fields, "bot-token")
+        init_data = build_login_widget_data(fields, "bot-token")
 
         with self.assertRaises(TelegramAuthError):
-            validate_init_data(init_data, "bot-token", now=1760000000 + 86401)
+            validate_login_widget(init_data, "bot-token", now=1760000000 + 86401)
 
 
 if __name__ == "__main__":
