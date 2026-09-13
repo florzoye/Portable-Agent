@@ -8,7 +8,7 @@ from src.agents.chat import AgentInvoker
 from src.factories.tools_factory import get_tools
 from src.factories.agents_factory import AgentsFactory
 from src.agents.llms.initializer import LLMInitializer
-from src.services.telegram.bot.dependencies import get_agent
+from src.services.dependencies import get_agent
 from src.factories.checkpointer_factory import get_checkpointer, close_checkpointer
 from src.agents.tools.reminders import close_reminders_client
 from src.agents.tools.calendar import close_calendar_client
