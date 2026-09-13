@@ -351,7 +351,7 @@ Both the Telegram bot and the Web UI share the same **LangGraph ReAct agent** wi
 - **Persistent memory** via `AsyncPostgresSaver` (PostgreSQL checkpointer)
 - **MCP tools** — Google Calendar and Reminders tools loaded at startup
 - **Dynamic LLM selection** — auto-selects the first available LLM in Docker, interactive selection in TTY
-- **Session isolation** — Telegram uses `tg_id` as `thread_id`; Web UI uses a random 8-digit numeric `session_id`
+- **Session isolation** — each authenticated Telegram user has a server-owned chat thread and isolated memory at `/memory/users/<telegram_id>/AGENTS.md`
 
 ### Available Tools (via MCP)
 

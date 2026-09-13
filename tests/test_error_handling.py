@@ -18,6 +18,7 @@ from utils.helpers import DateTimeNormalizer
 from src.models.events import EventsRangeRequest, SearchEventsRequest
 from src.agents.prompts.system import AgentSystemPrompt
 from src.agents.middleware import UserContextMiddleware
+from src.agents.memory import normalize_memory_user_id, user_memory_path
 from data.configs.tg_config import TelegramSettings
 from src.services.web.one_time_code import (
     generate_login_code,
@@ -249,6 +250,20 @@ class ErrorHandlingTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(timezone_name, "Europe/Moscow")
         self.assertEqual(scheduled.astimezone(timezone.utc).hour, 9)
+
+    def test_memory_path_is_stable_for_a_user(self):
+        self.assertEqual(
+            user_memory_path(42),
+            "/memory/users/42/AGENTS.md",
+        )
+        self.assertEqual(
+            user_memory_path("42"),
+            "/memory/users/42/AGENTS.md",
+        )
+
+    def test_memory_user_id_rejects_path_traversal(self):
+        with self.assertRaises(ValueError):
+            normalize_memory_user_id("../other-user")
     def test_web_login_code_uses_scoped_redis_keys(self):
         self.assertEqual(login_code_key("12345678"), "web_login_code:12345678")
         self.assertEqual(

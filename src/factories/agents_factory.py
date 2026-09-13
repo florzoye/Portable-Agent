@@ -8,6 +8,7 @@ from deepagents import create_deep_agent
 from deepagents.backends import FilesystemBackend
 from src.agents.prompts.system import AgentSystemPrompt
 from src.agents.middleware import UserContextMiddleware
+from src.agents.memory import user_memory_path
 from src.factories.middleware_factory import MiddlewareFactory
 
 from utils.metaclasses import AgentsFactoryMeta
@@ -38,7 +39,9 @@ class AgentsFactory(metaclass=AgentsFactoryMeta):
         self.channel = channel
 
     def _get_memory_path(self) -> str:
-        return f"/memory/users/{self.tg_id}/AGENTS.md"
+        if self.tg_id is None:
+            raise ValueError("Memory requires a user ID")
+        return user_memory_path(self.tg_id)
 
     async def aget_agent(self) -> CompiledStateGraph:
         middleware = list(self.middleware.get_middleware()) if self.middleware else []
