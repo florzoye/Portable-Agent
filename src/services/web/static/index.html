@@ -331,8 +331,10 @@
 </footer>
 <div id="auth-screen" style="position:fixed;inset:0;background:#0a0a0a;display:flex;align-items:center;justify-content:center;z-index:10">
   <div style="text-align:center">
-    <p style="color:#aaa;margin-bottom:16px">Войдите через Telegram, чтобы продолжить</p>
-    <div id="telegram-login"></div>
+    <p style="color:#aaa;margin-bottom:16px">Введите одноразовый код из Telegram</p>
+    <input id="login-code" inputmode="numeric" maxlength="8" placeholder="12345678"
+      style="padding:10px;border:1px solid #333;background:#141414;color:#ddd;border-radius:6px;text-align:center">
+    <button id="login-button" style="display:block;margin:12px auto;padding:8px 18px">Войти</button>
     <p id="auth-error" style="color:#d07070;margin-top:12px;font-size:12px"></p>
   </div>
 </div>
@@ -360,38 +362,24 @@
 
   let ws, isWaiting = false, tagTimer = null;
 
-  async function telegramAuth(user) {
-    const authData = new URLSearchParams(user).toString();
-    const response = await fetch("/auth/telegram", {
+  async function loginWithCode() {
+    const code = document.getElementById("login-code").value;
+    const response = await fetch("/auth/code", {
       method: "POST",
       headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({auth_data: authData}),
+      body: JSON.stringify({code}),
     });
-    if (!response.ok) throw new Error("Не удалось выполнить вход");
+    if (!response.ok) throw new Error("Неверный или просроченный код");
     document.getElementById("auth-screen").remove();
     loadModels();
     connect();
   }
 
-  async function loadTelegramLogin() {
-    try {
-      const response = await fetch("/auth/config");
-      if (!response.ok) throw new Error("Telegram Login Widget не настроен");
-      const {bot_username} = await response.json();
-      window.onTelegramAuth = user => telegramAuth(user).catch(error => {
-        document.getElementById("auth-error").textContent = error.message;
-      });
-      const script = document.createElement("script");
-      script.src = "https://telegram.org/js/telegram-widget.js?22";
-      script.async = true;
-      script.dataset.telegramLogin = bot_username;
-      script.dataset.size = "large";
-      script.dataset.onauth = "onTelegramAuth(user)";
-      document.getElementById("telegram-login").appendChild(script);
-    } catch (error) {
+  document.getElementById("login-button").addEventListener("click", () =>
+    loginWithCode().catch(error => {
       document.getElementById("auth-error").textContent = error.message;
-    }
-  }
+    })
+  );
 
   // ── Spoiler click handler ─────────────────────────────────────────────────
   document.addEventListener("click", e => {
@@ -547,7 +535,6 @@
     inputEl.style.height = Math.min(inputEl.scrollHeight, 120) + "px";
   });
 
-  loadTelegramLogin();
 </script>
 </body>
 </html>

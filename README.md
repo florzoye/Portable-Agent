@@ -236,6 +236,12 @@ LANGFUSE_PUBLIC_KEY=your_langfuse_public
 LANGFUSE_BASE_URL=https://cloud.langfuse.com
 ```
 
+### Web UI login
+
+To create a one-time Web UI login code, send `/web` to the Telegram bot.
+Enter the received 8-digit code on the Web UI within five minutes. Each code
+is accepted only once.
+
 ---
 
 ## 📁 Project Structure
