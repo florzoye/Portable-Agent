@@ -22,7 +22,7 @@ async def _session_keeper(ready: asyncio.Event, stop: asyncio.Event) -> None:
                 _reminders_tools = await load_mcp_tools(session)
                 ready.set()
                 await stop.wait()
-    except Exception:
+    except (OSError, asyncio.TimeoutError, RuntimeError, ValueError):
         logger.exception("Reminders MCP session error")
     finally:
         _reminders_tools = []

@@ -21,7 +21,7 @@ async def _session_keeper(ready: asyncio.Event, stop: asyncio.Event) -> None:
                 _calendar_client_tools = await load_mcp_tools(session)
                 ready.set()
                 await stop.wait()
-    except Exception:
+    except (OSError, asyncio.TimeoutError, RuntimeError, ValueError):
         logger.exception("Calendar MCP session error")
     finally:
         _calendar_client_tools = []
