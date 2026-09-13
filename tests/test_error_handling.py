@@ -17,6 +17,7 @@ from utils.crypto import TokenCipher
 from utils.helpers import DateTimeNormalizer
 from src.models.events import EventsRangeRequest, SearchEventsRequest
 from src.agents.prompts.system import AgentSystemPrompt
+from src.agents.middleware import UserContextMiddleware
 
 
 class FakeResponse:
@@ -122,6 +123,40 @@ class ErrorHandlingTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("After every write operation, verify the result", prompt)
         self.assertIn("for create_followup pass it as tg_id", prompt)
         self.assertIn('channel="web"', prompt)
+
+    async def test_user_context_overrides_model_tool_arguments(self):
+        middleware = UserContextMiddleware(user_id="42", channel="web")
+        request = type(
+            "Request",
+            (),
+            {
+                "tool_call": {
+                    "name": "create_reminder",
+                    "args": {
+                        "user_id": "999",
+                        "channel": "telegram",
+                        "text": "test",
+                    },
+                    "id": "call-1",
+                },
+                "override": lambda self, **kwargs: type(
+                    "Request",
+                    (),
+                    {
+                        "tool_call": kwargs["tool_call"],
+                        "override": self.override,
+                    },
+                )(),
+            },
+        )()
+
+        async def handler(bound_request):
+            return bound_request.tool_call["args"]
+
+        result = await middleware.awrap_tool_call(request, handler)
+
+        self.assertEqual(result["user_id"], "42")
+        self.assertEqual(result["channel"], "web")
 
 
 if __name__ == "__main__":
