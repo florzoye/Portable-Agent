@@ -18,6 +18,7 @@ from utils.helpers import DateTimeNormalizer
 from src.models.events import EventsRangeRequest, SearchEventsRequest
 from src.agents.prompts.system import AgentSystemPrompt
 from src.agents.middleware import UserContextMiddleware
+from data.configs.tg_config import TelegramSettings
 
 
 class FakeResponse:
@@ -157,6 +158,21 @@ class ErrorHandlingTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(result["user_id"], "42")
         self.assertEqual(result["channel"], "web")
+
+    def test_telegram_proxy_accepts_supported_schemes(self):
+        settings = TelegramSettings(
+            BOT_TOKEN="test-token",
+            TELEGRAM_PROXY="socks5://proxy.example:1080",
+        )
+
+        self.assertEqual(settings.TELEGRAM_PROXY, "socks5://proxy.example:1080")
+
+    def test_telegram_proxy_rejects_unsupported_scheme(self):
+        with self.assertRaises(ValueError):
+            TelegramSettings(
+                BOT_TOKEN="test-token",
+                TELEGRAM_PROXY="ftp://proxy.example:21",
+            )
 
 
 if __name__ == "__main__":
