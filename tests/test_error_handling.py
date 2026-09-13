@@ -182,7 +182,8 @@ class ErrorHandlingTests(unittest.IsolatedAsyncioTestCase):
     def test_telegram_login_widget_returns_signed_user(self):
         fields = {
             "auth_date": "1760000000",
-            "user": '{"id":42,"first_name":"Test"}',
+            "id": "42",
+            "first_name": "Test",
         }
         init_data = build_login_widget_data(fields, "bot-token")
 
@@ -191,23 +192,17 @@ class ErrorHandlingTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(user["id"], 42)
 
     def test_telegram_login_widget_rejects_tampered_payload(self):
-        fields = {
-            "auth_date": "1760000000",
-            "user": '{"id":42}',
-        }
+        fields = {"auth_date": "1760000000", "id": "42"}
         init_data = build_login_widget_data(fields, "bot-token").replace(
-            "%22id%22%3A42",
-            "%22id%22%3A99",
+            "id=42",
+            "id=99",
         )
 
         with self.assertRaises(TelegramAuthError):
             validate_login_widget(init_data, "bot-token", now=1760000010)
 
     def test_telegram_login_widget_rejects_expired_payload(self):
-        fields = {
-            "auth_date": "1760000000",
-            "user": '{"id":42}',
-        }
+        fields = {"auth_date": "1760000000", "id": "42"}
         init_data = build_login_widget_data(fields, "bot-token")
 
         with self.assertRaises(TelegramAuthError):

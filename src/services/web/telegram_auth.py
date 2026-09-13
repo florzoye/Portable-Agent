@@ -1,6 +1,5 @@
 import hashlib
 import hmac
-import json
 import time
 from urllib.parse import parse_qsl, urlencode
 
@@ -48,12 +47,13 @@ def validate_login_widget(
         raise TelegramAuthError("Telegram authentication data has expired")
 
     try:
-        user = json.loads(fields["user"])
-    except (KeyError, TypeError, json.JSONDecodeError) as exc:
-        raise TelegramAuthError("Telegram user data is invalid") from exc
-
-    if not isinstance(user, dict) or not isinstance(user.get("id"), int):
-        raise TelegramAuthError("Telegram user ID is missing")
+        user_id = int(fields["id"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise TelegramAuthError("Telegram user ID is invalid") from exc
+    if user_id <= 0:
+        raise TelegramAuthError("Telegram user ID is invalid")
+    user = {key: value for key, value in fields.items() if key != "auth_date"}
+    user["id"] = user_id
     return user
 
 

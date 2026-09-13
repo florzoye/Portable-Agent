@@ -1,8 +1,10 @@
 import pathlib
 import asyncio
+import os
+import secrets
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Request, Response, Cookie
 from fastapi.responses import HTMLResponse 
 from fastapi.staticfiles import StaticFiles
 from loguru import logger
@@ -17,8 +19,12 @@ from src.factories.checkpointer_factory import close_checkpointer, get_checkpoin
 from src.factories.tools_factory import get_tools
 from src.services.dependencies import get_agent, get_session_model, set_session_model
 from utils.renderers import MessageRenderer
+from src.services.web.telegram_auth import TelegramAuthError, validate_login_widget
 
 STATIC_DIR = pathlib.Path(__file__).parent / "static"
+SESSION_COOKIE = "portable_session"
+SESSION_TTL = 86400
+SESSION_KEY_PREFIX = "web_session:"
 
 
 def _model_id(llm) -> str:
@@ -106,9 +112,51 @@ async def list_models():
 class SelectModelRequest(BaseModel):
     model_id: str
 
+class TelegramLoginRequest(BaseModel):
+    auth_data: str
+
+
+async def _get_session_user(session_id: str | None) -> int:
+    if not session_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    value = await get_config().redis_client.get(f"{SESSION_KEY_PREFIX}{session_id}")
+    if value is None:
+        raise HTTPException(status_code=401, detail="Session expired")
+    return int(value)
+
+
+@app.post("/auth/telegram")
+async def telegram_login(body: TelegramLoginRequest, response: Response):
+    cfg = get_config()
+    try:
+        user = validate_login_widget(body.auth_data, cfg.TG_SETTINGS.BOT_TOKEN)
+    except TelegramAuthError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+
+    session_id = secrets.token_urlsafe(32)
+    await cfg.redis_client.setex(
+        f"{SESSION_KEY_PREFIX}{session_id}",
+        SESSION_TTL,
+        str(user["id"]),
+    )
+    response.set_cookie(
+        SESSION_COOKIE,
+        session_id,
+        max_age=SESSION_TTL,
+        httponly=True,
+        secure=os.environ.get("WEB_COOKIE_SECURE", "false").lower() == "true",
+        samesite="lax",
+    )
+    return {"user": user}
+
 
 @app.post("/session/{session_id}/model")
-async def select_model(session_id: str, body: SelectModelRequest):
+async def select_model(
+    session_id: str,
+    body: SelectModelRequest,
+    portable_session: str | None = Cookie(default=None),
+):
+    user_id = await _get_session_user(portable_session)
     llm = _llm_by_id(body.model_id)
     if llm is None:
         
@@ -118,13 +166,23 @@ async def select_model(session_id: str, body: SelectModelRequest):
 
 
 @app.get("/session/{session_id}/model")
-async def current_model(session_id: str):
+async def current_model(
+    session_id: str,
+    portable_session: str | None = Cookie(default=None),
+):
+    await _get_session_user(portable_session)
     llm = get_session_model(session_id)
     return {"session_id": session_id, "active_model": _model_id(llm)}
 
 
 @app.websocket("/ws/{session_id}")
 async def websocket_chat(websocket: WebSocket, session_id: str):
+    portable_session = websocket.cookies.get(SESSION_COOKIE)
+    try:
+        user_id = await _get_session_user(portable_session)
+    except HTTPException:
+        await websocket.close(code=1008, reason="Authentication required")
+        return
     await websocket.accept()
     cfg = get_config()
     logger.info(f"WebSocket connected: session={session_id}")
@@ -139,7 +197,7 @@ async def websocket_chat(websocket: WebSocket, session_id: str):
                 continue
 
             try:
-                agent = await get_agent(session_id)
+                agent = await get_agent(session_id, user_id)
                 llm = get_session_model(session_id)
 
                 invoker = AgentInvoker(agent, session_id)
