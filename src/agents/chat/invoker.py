@@ -3,6 +3,8 @@ from langgraph.graph.state import CompiledStateGraph
 from langchain_core.language_models import BaseChatModel
 
 from src.agents.chat.base import StreamSender
+from utils.observability import emit_event
+import time
 
 class AgentInvoker:
     """
@@ -104,11 +106,26 @@ class AgentInvoker:
         """
         messages = [{"role": "user", "content": user_message}]
         config = self._build_config(runnable_config)
+        started = time.perf_counter()
+        emit_event("agent.invoke.started", user_id=self.user_id)
 
         if self._supports_streaming(llm):
             text, ok = await self._stream_tokens(messages, config, sender)
             if ok:
+                emit_event(
+                    "agent.invoke.completed",
+                    user_id=self.user_id,
+                    mode="stream",
+                    duration_ms=round((time.perf_counter() - started) * 1000, 2),
+                )
                 return text
             logger.info(f"Fallback to plain invoke for user={self.user_id}")
 
-        return await self._invoke_plain(messages, config)
+        result = await self._invoke_plain(messages, config)
+        emit_event(
+            "agent.invoke.completed",
+            user_id=self.user_id,
+            mode="plain",
+            duration_ms=round((time.perf_counter() - started) * 1000, 2),
+        )
+        return result

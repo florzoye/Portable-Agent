@@ -230,6 +230,17 @@ class ErrorHandlingTests(unittest.IsolatedAsyncioTestCase):
             },
         )
 
+    def test_observability_event_does_not_include_sensitive_fields(self):
+        from unittest.mock import patch
+        from utils.observability import emit_event
+
+        with patch("utils.observability.logger.info") as log_info:
+            emit_event("auth", code="12345678", user_id=42)
+
+        payload = log_info.call_args.args[1]
+        self.assertNotIn("12345678", payload)
+        self.assertIn('"user_id": 42', payload)
+
     def test_calendar_event_list_helper_normalizes_responses(self):
         from src.services.calendar.mcp.common import event_list_result
 

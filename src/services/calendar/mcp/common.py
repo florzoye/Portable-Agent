@@ -3,6 +3,8 @@ from typing import Any
 from utils.client_session import AsyncHTTPClient
 from utils.helpers import format_event
 from src.services.tool_result import tool_failure, tool_success
+from utils.observability import emit_event
+import time
 
 
 async def calendar_request(
@@ -12,11 +14,21 @@ async def calendar_request(
     params: dict | None = None,
     payload: dict | None = None,
 ) -> tuple[int, Any]:
+    started = time.perf_counter()
     async with AsyncHTTPClient() as api:
         request = getattr(api, method)
         if method == "get" or method == "delete":
-            return await request(path, params=params)
-        return await request(path, json=payload)
+            result = await request(path, params=params)
+        else:
+            result = await request(path, json=payload)
+    emit_event(
+        "mcp.calendar.request",
+        method=method,
+        path=path,
+        status=result[0],
+        duration_ms=round((time.perf_counter() - started) * 1000, 2),
+    )
+    return result
 
 
 def event_list_result(

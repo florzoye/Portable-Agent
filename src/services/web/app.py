@@ -31,6 +31,7 @@ from src.services.web.one_time_code import (
     login_code_key,
     normalize_login_code,
 )
+from utils.observability import emit_event
 
 STATIC_DIR = pathlib.Path(__file__).parent / "static"
 SESSION_COOKIE = "portable_session"
@@ -181,6 +182,7 @@ async def code_login(body: CodeLoginRequest, request: Request, response: Respons
         secure=os.environ.get("WEB_COOKIE_SECURE", "false").lower() == "true",
         samesite="lax",
     )
+    emit_event("web.authenticated", user_id=int(user_id))
     return {"user_id": int(user_id)}
 
 
@@ -199,6 +201,7 @@ async def logout(
         if thread_id:
             clear_session_model(thread_id)
     response.delete_cookie(SESSION_COOKIE)
+    emit_event("web.logout")
     return {"logged_out": True}
 
 
@@ -243,6 +246,7 @@ async def websocket_chat(websocket: WebSocket, session_id: str):
         return
     await websocket.accept()
     cfg = get_config()
+    emit_event("web.websocket.connected", user_id=user_id, thread_id=thread_id)
     logger.info(f"WebSocket connected: session={thread_id}")
 
     listener_task = asyncio.create_task(_redis_listener(thread_id, websocket))
@@ -280,3 +284,4 @@ async def websocket_chat(websocket: WebSocket, session_id: str):
         logger.info(f"WebSocket disconnected: session={session_id}")
     finally:
         listener_task.cancel()
+        emit_event("web.websocket.disconnected", user_id=user_id, thread_id=thread_id)
