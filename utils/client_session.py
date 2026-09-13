@@ -1,4 +1,5 @@
 import aiohttp
+import json
 from typing import Any, Optional
 from utils.const import GOOGLE_CALENDAR_URI
 
@@ -32,8 +33,8 @@ class AsyncHTTPClient:
         if "application/json" in content_type:
             try:
                 data = await r.json()
-            except Exception:
-                data = await r.text() # сломаный JSON
+            except (aiohttp.ContentTypeError, json.JSONDecodeError):
+                data = await r.text()
         else:
             data = await r.text()
 
