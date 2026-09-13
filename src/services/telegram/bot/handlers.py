@@ -14,11 +14,15 @@ from src.agents.tools.reminders import close_reminders_client
 from src.agents.tools.calendar import close_calendar_client
 
 from data import get_config
-from src.services.web.one_time_code import generate_login_code
+from src.services.web.one_time_code import (
+    LOGIN_CODE_COOLDOWN,
+    LOGIN_CODE_TTL,
+    generate_login_code,
+    login_code_key,
+)
 
 _bot: Bot | None = None
 MAX_MESSAGE_LEN = 4096
-LOGIN_CODE_TTL = 300
 
 def init_telegram_sender(bot: Bot) -> None:
     global _bot
@@ -73,11 +77,12 @@ def register_handlers(dp: Dispatcher):
     @dp.message(Command("web"))
     async def handle_web_login(message: Message):
         code = generate_login_code()
-        await get_config().redis_client.setex(
-            f"web_login_code:{code}",
-            LOGIN_CODE_TTL,
-            str(message.from_user.id),
-        )
+        redis = get_config().redis_client
+        cooldown_key = f"web_login_cooldown:{message.from_user.id}"
+        if not await redis.set(cooldown_key, "1", ex=LOGIN_CODE_COOLDOWN, nx=True):
+            await message.answer("Код уже отправлен. Подождите минуту.")
+            return
+        await redis.setex(login_code_key(code), LOGIN_CODE_TTL, str(message.from_user.id))
         await message.answer(
             "Код для входа в Web UI: "
             f"{code}\nКод действителен 5 минут и одноразовый."

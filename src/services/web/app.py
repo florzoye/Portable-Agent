@@ -24,7 +24,13 @@ from src.services.dependencies import (
     set_session_model,
 )
 from utils.renderers import MessageRenderer
-from src.services.web.one_time_code import normalize_login_code
+from src.services.web.one_time_code import (
+    LOGIN_ATTEMPT_LIMIT,
+    LOGIN_ATTEMPT_WINDOW,
+    login_attempt_key,
+    login_code_key,
+    normalize_login_code,
+)
 
 STATIC_DIR = pathlib.Path(__file__).parent / "static"
 SESSION_COOKIE = "portable_session"
@@ -136,14 +142,22 @@ async def _get_session_context(session_id: str | None) -> tuple[int, str]:
 
 
 @app.post("/auth/code")
-async def code_login(body: CodeLoginRequest, response: Response):
+async def code_login(body: CodeLoginRequest, request: Request, response: Response):
     cfg = get_config()
+    client_id = request.client.host if request.client else "unknown"
+    attempts_key = login_attempt_key(client_id)
+    attempts = await cfg.redis_client.incr(attempts_key)
+    if attempts == 1:
+        await cfg.redis_client.expire(attempts_key, LOGIN_ATTEMPT_WINDOW)
+    if attempts > LOGIN_ATTEMPT_LIMIT:
+        raise HTTPException(status_code=429, detail="Too many login attempts")
+
     try:
         code = normalize_login_code(body.code)
     except ValueError as exc:
         raise HTTPException(status_code=401, detail=str(exc)) from exc
 
-    user_id = await cfg.redis_client.getdel(f"web_login_code:{code}")
+    user_id = await cfg.redis_client.getdel(login_code_key(code))
     if user_id is None:
         raise HTTPException(status_code=401, detail="Invalid or expired login code")
 
