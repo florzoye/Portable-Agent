@@ -17,7 +17,12 @@ from src.agents.tools.calendar import close_calendar_client
 from src.agents.tools.reminders import close_reminders_client
 from src.factories.checkpointer_factory import close_checkpointer, get_checkpointer
 from src.factories.tools_factory import get_tools
-from src.services.dependencies import get_agent, get_session_model, set_session_model
+from src.services.dependencies import (
+    clear_session_model,
+    get_agent,
+    get_session_model,
+    set_session_model,
+)
 from utils.renderers import MessageRenderer
 from src.services.web.one_time_code import normalize_login_code
 
@@ -25,6 +30,7 @@ STATIC_DIR = pathlib.Path(__file__).parent / "static"
 SESSION_COOKIE = "portable_session"
 SESSION_TTL = 86400
 SESSION_KEY_PREFIX = "web_session:"
+SESSION_THREAD_PREFIX = "web_session_thread:"
 
 
 def _model_id(llm) -> str:
@@ -116,13 +122,17 @@ class CodeLoginRequest(BaseModel):
     code: str
 
 
-async def _get_session_user(session_id: str | None) -> int:
+async def _get_session_context(session_id: str | None) -> tuple[int, str]:
     if not session_id:
         raise HTTPException(status_code=401, detail="Authentication required")
-    value = await get_config().redis_client.get(f"{SESSION_KEY_PREFIX}{session_id}")
-    if value is None:
+    redis = get_config().redis_client
+    user_id = await redis.get(f"{SESSION_KEY_PREFIX}{session_id}")
+    thread_id = await redis.get(f"{SESSION_THREAD_PREFIX}{session_id}")
+    if user_id is None or thread_id is None:
         raise HTTPException(status_code=401, detail="Session expired")
-    return int(value)
+    await redis.expire(f"{SESSION_KEY_PREFIX}{session_id}", SESSION_TTL)
+    await redis.expire(f"{SESSION_THREAD_PREFIX}{session_id}", SESSION_TTL)
+    return int(user_id), thread_id
 
 
 @app.post("/auth/code")
@@ -138,10 +148,16 @@ async def code_login(body: CodeLoginRequest, response: Response):
         raise HTTPException(status_code=401, detail="Invalid or expired login code")
 
     session_id = secrets.token_urlsafe(32)
+    thread_id = secrets.token_urlsafe(24)
     await cfg.redis_client.setex(
         f"{SESSION_KEY_PREFIX}{session_id}",
         SESSION_TTL,
         str(user_id),
+    )
+    await cfg.redis_client.setex(
+        f"{SESSION_THREAD_PREFIX}{session_id}",
+        SESSION_TTL,
+        thread_id,
     )
     response.set_cookie(
         SESSION_COOKIE,
@@ -154,19 +170,35 @@ async def code_login(body: CodeLoginRequest, response: Response):
     return {"user_id": int(user_id)}
 
 
+@app.post("/auth/logout")
+async def logout(
+    response: Response,
+    portable_session: str | None = Cookie(default=None),
+):
+    user_id, thread_id = await _get_session_context(portable_session)
+    redis = get_config().redis_client
+    await redis.delete(
+        f"{SESSION_KEY_PREFIX}{portable_session}",
+        f"{SESSION_THREAD_PREFIX}{portable_session}",
+    )
+    clear_session_model(thread_id)
+    response.delete_cookie(SESSION_COOKIE)
+    return {"logged_out": True, "user_id": user_id}
+
+
 @app.post("/session/{session_id}/model")
 async def select_model(
     session_id: str,
     body: SelectModelRequest,
     portable_session: str | None = Cookie(default=None),
 ):
-    user_id = await _get_session_user(portable_session)
+    user_id, thread_id = await _get_session_context(portable_session)
     llm = _llm_by_id(body.model_id)
     if llm is None:
         
         raise HTTPException(status_code=404, detail=f"Model '{body.model_id}' not found")
-    set_session_model(session_id, llm, user_id)
-    return {"session_id": session_id, "active_model": body.model_id}
+    set_session_model(thread_id, llm, user_id)
+    return {"session_id": thread_id, "active_model": body.model_id}
 
 
 @app.get("/session/{session_id}/model")
@@ -174,24 +206,24 @@ async def current_model(
     session_id: str,
     portable_session: str | None = Cookie(default=None),
 ):
-    await _get_session_user(portable_session)
-    llm = get_session_model(session_id)
-    return {"session_id": session_id, "active_model": _model_id(llm)}
+    _, thread_id = await _get_session_context(portable_session)
+    llm = get_session_model(thread_id)
+    return {"session_id": thread_id, "active_model": _model_id(llm)}
 
 
 @app.websocket("/ws/{session_id}")
 async def websocket_chat(websocket: WebSocket, session_id: str):
     portable_session = websocket.cookies.get(SESSION_COOKIE)
     try:
-        user_id = await _get_session_user(portable_session)
+        user_id, thread_id = await _get_session_context(portable_session)
     except HTTPException:
         await websocket.close(code=1008, reason="Authentication required")
         return
     await websocket.accept()
     cfg = get_config()
-    logger.info(f"WebSocket connected: session={session_id}")
+    logger.info(f"WebSocket connected: session={thread_id}")
 
-    listener_task = asyncio.create_task(_redis_listener(session_id, websocket))
+    listener_task = asyncio.create_task(_redis_listener(thread_id, websocket))
 
     try:
         while True:
@@ -201,10 +233,10 @@ async def websocket_chat(websocket: WebSocket, session_id: str):
                 continue
 
             try:
-                agent = await get_agent(session_id, user_id)
-                llm = get_session_model(session_id)
+                agent = await get_agent(thread_id, user_id)
+                llm = get_session_model(thread_id)
 
-                invoker = AgentInvoker(agent, session_id)
+                invoker = AgentInvoker(agent, thread_id)
                 response = await invoker.invoke(
                     user_message=text,
                     runnable_config=cfg.RUNNABLE_CONFIG,
@@ -216,7 +248,7 @@ async def websocket_chat(websocket: WebSocket, session_id: str):
                 await websocket.send_json({"type": "message", "content": html})
 
             except Exception as e:
-                logger.exception(f"Agent error for session={session_id}: {e}")
+                logger.exception(f"Agent error for session={thread_id}: {e}")
                 await websocket.send_json({
                     "type": "error",
                     "content": "⚠️ An error occurred, please try again",

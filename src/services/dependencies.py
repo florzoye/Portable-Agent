@@ -19,6 +19,10 @@ def set_session_model(
     AgentsFactory.reset(tg_id=user_id if user_id is not None else session_id)
 
 
+def clear_session_model(session_id: str) -> None:
+    _session_models.pop(session_id, None)
+
+
 def get_session_model(session_id: str) -> BaseChatModel:
     return _session_models.get(session_id) or LLMInitializer.get_selected()
 
