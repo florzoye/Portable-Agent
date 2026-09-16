@@ -3,6 +3,8 @@ from collections.abc import Sequence
 from db.model_profiles_protocol import ModelProfilesBase
 from db.database import Database
 from db.database_protocol import UsersBase
+from data import get_config
+from src.exceptions.config_exp import ConfigNotInitializedError
 from src.agents.providers.base import ProviderConfigurationError
 from src.agents.providers.registry import ProviderRegistry
 from src.services.models.providers import (
@@ -35,6 +37,20 @@ class ModelProfileService:
         display_name: str,
         api_key: str | None = None,
     ) -> UserModelProfile:
+        try:
+            limits = get_config().TENANT_LIMITS
+        except ConfigNotInitializedError:
+            limits = type(
+                "DefaultTenantLimits",
+                (),
+                {
+                    "MAX_MODEL_PROFILES": 10,
+                    "MAX_MODEL_NAME_LENGTH": 200,
+                    "MAX_DISPLAY_NAME_LENGTH": 200,
+                },
+            )()
+        if len(await self.profiles.list_for_user(user_id)) >= limits.MAX_MODEL_PROFILES:
+            raise ValueError("Model profile limit reached")
         adapter = self.registry.get(provider)
         if adapter.capabilities.developer_managed:
             api_key = None
@@ -48,6 +64,10 @@ class ModelProfileService:
         display_name = display_name.strip() or model_name
         if not model_name:
             raise ValueError("Model name is required")
+        if len(model_name) > limits.MAX_MODEL_NAME_LENGTH:
+            raise ValueError("Model name is too long")
+        if len(display_name) > limits.MAX_DISPLAY_NAME_LENGTH:
+            raise ValueError("Display name is too long")
         return await self.profiles.create(
             user_id,
             provider,

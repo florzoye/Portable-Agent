@@ -191,6 +191,9 @@ class ComprehensiveTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_model_profile_service_requires_keys_only_for_user_managed_providers(self):
         class Profiles:
+            async def list_for_user(self, user_id):
+                return []
+
             async def create(self, user_id, provider, model_name, display_name, api_key):
                 return UserModelProfile(1, user_id, provider, model_name, display_name, False)
 
@@ -230,6 +233,27 @@ class ComprehensiveTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(profile.provider, ModelProvider.OLLAMA)
 
+    async def test_model_profile_service_enforces_profile_name_limits(self):
+        class Profiles:
+            async def list_for_user(self, user_id):
+                return []
+
+            async def create(self, *args):
+                raise AssertionError("profile must be rejected")
+
+        class Limits:
+            MAX_MODEL_PROFILES = 10
+            MAX_MODEL_NAME_LENGTH = 4
+            MAX_DISPLAY_NAME_LENGTH = 4
+
+        with patch("src.services.model_profiles.get_config") as config:
+            config.return_value.TENANT_LIMITS = Limits()
+            service = ModelProfileService(Profiles())
+            with self.assertRaisesRegex(ValueError, "too long"):
+                await service.add(
+                    1, ModelProvider.OLLAMA, "llama3.2", "Ollama"
+                )
+
     async def test_model_profile_application_initializes_telegram_tenant(self):
         class Users:
             def __init__(self):
@@ -243,6 +267,9 @@ class ComprehensiveTests(unittest.IsolatedAsyncioTestCase):
                 return object()
 
         class Profiles:
+            async def list_for_user(self, user_id):
+                return []
+
             async def create(self, user_id, provider, model_name, display_name, api_key):
                 return UserModelProfile(
                     1, user_id, provider, model_name, display_name, False
