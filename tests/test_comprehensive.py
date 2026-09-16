@@ -147,6 +147,11 @@ class ComprehensiveTests(unittest.IsolatedAsyncioTestCase):
             self.assertIn(label, source)
         self.assertIn('@dp.message(Command("start"))', source)
         self.assertIn("is_persistent=True", source)
+        self.assertIn("def _section_keyboard(section: str)", source)
+        self.assertIn('callback_data="nav:back"', source)
+        self.assertIn('callback_data="nav:cancel"', source)
+        self.assertIn('F.data.startswith("nav:calendar:")', source)
+        self.assertIn('F.data.startswith("nav:reminders:")', source)
 
     def test_mcp_success_result_keeps_machine_data(self):
         result = tool_success("created", {"event_id": "event-1"})

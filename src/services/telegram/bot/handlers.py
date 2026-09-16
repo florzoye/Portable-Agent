@@ -80,6 +80,26 @@ def _main_keyboard() -> ReplyKeyboardMarkup:
     )
 
 
+def _section_keyboard(section: str) -> InlineKeyboardMarkup:
+    if section == "calendar":
+        rows = [
+            [InlineKeyboardButton(text="➕ Создать событие", callback_data="nav:calendar:create")],
+            [InlineKeyboardButton(text="📋 Мои события", callback_data="nav:calendar:list")],
+        ]
+    else:
+        rows = [
+            [InlineKeyboardButton(text="➕ Создать напоминание", callback_data="nav:reminders:create")],
+            [InlineKeyboardButton(text="📋 Мои напоминания", callback_data="nav:reminders:list")],
+        ]
+    rows.append(
+        [
+            InlineKeyboardButton(text="⬅️ Назад", callback_data="nav:back"),
+            InlineKeyboardButton(text="❌ Отмена", callback_data="nav:cancel"),
+        ]
+    )
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
 def _setup_prompt(provider: str, step: str) -> str:
     labels = {
         "openai": "OpenAI",
@@ -224,16 +244,55 @@ def register_handlers(dp: Dispatcher):
     @dp.message(F.text == "📅 Календарь")
     async def handle_calendar_button(message: Message):
         await message.answer(
-            "Календарь доступен через чат. Например: «создай событие завтра в 10:00».",
-            reply_markup=_main_keyboard(),
+            "Выберите действие календаря:",
+            reply_markup=_section_keyboard("calendar"),
         )
 
     @dp.message(F.text == "⏰ Напоминания")
     async def handle_reminders_button(message: Message):
         await message.answer(
-            "Напоминания доступны через чат. Например: «напомни позвонить через час».",
+            "Выберите действие с напоминаниями:",
+            reply_markup=_section_keyboard("reminders"),
+        )
+
+    @dp.callback_query(F.data.startswith("nav:calendar:"))
+    async def handle_calendar_navigation(callback: CallbackQuery):
+        action = callback.data.rsplit(":", 1)[1]
+        prompts = {
+            "create": "Опишите событие: например, «создай встречу завтра в 10:00»",
+            "list": "Напишите, какие события показать: например, «покажи мои события на сегодня»",
+        }
+        await callback.message.edit_text(
+            prompts.get(action, "Выберите действие календаря."),
+            reply_markup=_section_keyboard("calendar"),
+        )
+        await callback.answer()
+
+    @dp.callback_query(F.data.startswith("nav:reminders:"))
+    async def handle_reminders_navigation(callback: CallbackQuery):
+        action = callback.data.rsplit(":", 1)[1]
+        prompts = {
+            "create": "Опишите напоминание: например, «напомни позвонить через час»",
+            "list": "Напишите, какие напоминания показать: например, «покажи активные напоминания»",
+        }
+        await callback.message.edit_text(
+            prompts.get(action, "Выберите действие с напоминаниями."),
+            reply_markup=_section_keyboard("reminders"),
+        )
+        await callback.answer()
+
+    @dp.callback_query(F.data == "nav:back")
+    async def handle_navigation_back(callback: CallbackQuery):
+        await callback.message.answer(
+            "Выберите раздел.",
             reply_markup=_main_keyboard(),
         )
+        await callback.answer()
+
+    @dp.callback_query(F.data == "nav:cancel")
+    async def handle_navigation_cancel(callback: CallbackQuery):
+        await callback.message.edit_text("Раздел закрыт.")
+        await callback.answer()
 
     @dp.message(F.text == "ℹ️ Помощь")
     async def handle_help_button(message: Message):
