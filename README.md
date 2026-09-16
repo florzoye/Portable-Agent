@@ -32,10 +32,31 @@ in Telegram. The hosted Ollama profile is managed by the operator and does
 not require a user key.
 
 Provider integrations use a registry and adapter interface. To add a provider,
-implement the provider adapter and capabilities, register it in the provider
-registry, add its typed configuration and tests, then expose its metadata to
-the Telegram/Web profile services. Transport handlers should not construct
-provider clients directly.
+follow this checklist:
+
+1. Add a `ModelProvider` enum value and a `ProviderCapabilities` entry with a
+   stable display name, key requirement, and ownership mode.
+2. Implement `ProviderAdapter.validate` for local, token-free configuration
+   checks and `create_model` for the provider client. Call
+   `validate_configuration` before construction and normalize unexpected
+   failures into the typed `ProviderError` hierarchy.
+3. Register one adapter instance in `ProviderRegistry`. The registry is the
+   only provider lookup used by application services.
+4. Add provider-specific configuration to `data/configs` and keep secrets in
+   the existing encrypted profile storage. Never return API keys in profile
+   responses, diagnostics, or logs.
+5. Run the shared adapter contract helper in
+   `tests/provider_contract.py`. It verifies capabilities, required-key
+   validation, diagnostics metadata, and the optional upstream health-check
+   lifecycle. Add provider-specific tests only for behavior not covered by the
+   contract.
+6. The application facade exposes provider capabilities to both Telegram and
+   Web. Do not edit transport handlers to construct provider clients or
+   duplicate provider error mapping.
+
+The contract intentionally separates `validate` from `health_check`: profile
+creation and local diagnostics must not spend provider tokens, while an
+upstream check is explicit and uses the adapter's `create_model` path.
 
 ---
 
