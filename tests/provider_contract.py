@@ -44,12 +44,21 @@ async def assert_provider_contract(
     assert isinstance(adapter.diagnostics()["display_name"], str)
 
     if model_factory is not None:
-        created: dict[str, Any] = {}
+        created: dict[str, Any] = {"count": 0}
+        original_create_model = adapter.create_model
 
         async def create_model(context: ProviderContext) -> BaseChatModel:
             created["context"] = context
+            created["count"] += 1
             return await model_factory(context)
 
-        adapter.create_model = create_model  # type: ignore[method-assign]
-        await adapter.health_check(context, check_upstream=True)
-        assert created["context"] == context
+        try:
+            adapter.create_model = create_model  # type: ignore[method-assign]
+            await adapter.health_check(context, check_upstream=False)
+            assert created["count"] == 0
+
+            await adapter.health_check(context, check_upstream=True)
+            assert created["context"] == context
+            assert created["count"] == 1
+        finally:
+            adapter.create_model = original_create_model  # type: ignore[method-assign]
