@@ -520,6 +520,48 @@ class ComprehensiveTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("вовремя", result.message)
         self.assertNotIn("internal timeout", result.message)
 
+    async def test_model_profile_audit_events_are_tenant_scoped_and_secret_free(self):
+        class Profiles:
+            async def list_for_user(self, user_id):
+                return []
+
+            async def create(
+                self, user_id, provider, model_name, display_name, api_key
+            ):
+                return UserModelProfile(
+                    9, user_id, provider, model_name, display_name, False
+                )
+
+        service = ModelProfileService(
+            Profiles(),
+            limits=type(
+                "Limits",
+                (),
+                {
+                    "MAX_MODEL_PROFILES": 10,
+                    "MAX_MODEL_NAME_LENGTH": 200,
+                    "MAX_DISPLAY_NAME_LENGTH": 200,
+                },
+            )(),
+        )
+        with patch("src.services.model_profiles.emit_event") as emit:
+            await service.add(
+                42,
+                ModelProvider.OPENAI,
+                "gpt-4o-mini",
+                "OpenAI",
+                api_key="sk-live-secret",
+            )
+
+        emit.assert_called_once()
+        name, fields = emit.call_args.args[0], emit.call_args.kwargs
+        self.assertEqual(name, "model_profile.audit")
+        self.assertEqual(fields["user_id"], 42)
+        self.assertEqual(fields["action"], "create")
+        self.assertEqual(fields["result"], "succeeded")
+        self.assertNotIn("api_key", fields)
+        self.assertNotIn("sk-live-secret", str(fields))
+
     async def test_model_profile_application_initializes_telegram_tenant(self):
         class Users:
             def __init__(self):

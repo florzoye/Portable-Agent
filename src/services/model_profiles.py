@@ -18,6 +18,40 @@ from src.services.models.providers import (
     ProviderCapabilities,
     UserModelProfile,
 )
+from utils.observability import emit_event
+
+
+def _audit_profile_event(
+    action: str,
+    user_id: int,
+    *,
+    result: str,
+    profile_id: int | None = None,
+    provider: ModelProvider | None = None,
+    error_category: str | None = None,
+) -> None:
+    fields = {
+        "user_id": user_id,
+        "action": action,
+        "result": result,
+    }
+    if profile_id is not None:
+        fields["profile_id"] = profile_id
+    if provider is not None:
+        fields["provider"] = provider.value
+    if error_category is not None:
+        fields["error_category"] = error_category
+    emit_event("model_profile.audit", **fields)
+
+
+def _error_category(error: BaseException) -> str:
+    if isinstance(error, ProviderConfigurationError):
+        return "configuration"
+    if isinstance(error, ProviderError):
+        return "provider"
+    if isinstance(error, ValueError):
+        return "validation"
+    return "internal"
 
 
 class ModelProfileService:
@@ -60,6 +94,12 @@ class ModelProfileService:
             None,
         )
         if profile is None:
+            _audit_profile_event(
+                "diagnose",
+                user_id,
+                result="not_found",
+                profile_id=profile_id,
+            )
             raise ValueError("Model profile not found")
         api_key = await self.profiles.get_api_key(user_id, profile_id)
         adapter = self.registry.get(profile.provider)
@@ -67,6 +107,14 @@ class ModelProfileService:
         try:
             await adapter.health_check(context, check_upstream)
         except ProviderError as error:
+            _audit_profile_event(
+                "diagnose",
+                user_id,
+                result="failed",
+                profile_id=profile.id,
+                provider=profile.provider,
+                error_category=_error_category(error),
+            )
             return ProviderDiagnostic(
                 profile.id,
                 profile.provider,
@@ -75,6 +123,13 @@ class ModelProfileService:
                 provider_user_message(error),
                 check_upstream,
             )
+        _audit_profile_event(
+            "diagnose",
+            user_id,
+            result="healthy",
+            profile_id=profile.id,
+            provider=profile.provider,
+        )
         return ProviderDiagnostic(
             profile.id,
             profile.provider,
@@ -94,42 +149,100 @@ class ModelProfileService:
         display_name: str,
         api_key: str | None = None,
     ) -> UserModelProfile:
-        if len(await self.profiles.list_for_user(user_id)) >= self.limits.MAX_MODEL_PROFILES:
-            raise ValueError("Model profile limit reached")
-        adapter = self.registry.get(provider)
-        if adapter.capabilities.developer_managed:
-            api_key = None
-        elif not api_key or not api_key.strip():
-            raise ProviderConfigurationError(
-                f"{adapter.capabilities.display_name} requires your API key"
+        try:
+            if len(await self.profiles.list_for_user(user_id)) >= self.limits.MAX_MODEL_PROFILES:
+                raise ValueError("Model profile limit reached")
+            adapter = self.registry.get(provider)
+            if adapter.capabilities.developer_managed:
+                api_key = None
+            elif not api_key or not api_key.strip():
+                raise ProviderConfigurationError(
+                    f"{adapter.capabilities.display_name} requires your API key"
+                )
+            elif api_key is not None:
+                api_key = api_key.strip()
+            model_name = model_name.strip()
+            display_name = display_name.strip() or model_name
+            if not model_name:
+                raise ValueError("Model name is required")
+            if len(model_name) > self.limits.MAX_MODEL_NAME_LENGTH:
+                raise ValueError("Model name is too long")
+            if len(display_name) > self.limits.MAX_DISPLAY_NAME_LENGTH:
+                raise ValueError("Display name is too long")
+            profile = await self.profiles.create(
+                user_id,
+                provider,
+                model_name,
+                display_name,
+                api_key,
             )
-        elif api_key is not None:
-            api_key = api_key.strip()
-        model_name = model_name.strip()
-        display_name = display_name.strip() or model_name
-        if not model_name:
-            raise ValueError("Model name is required")
-        if len(model_name) > self.limits.MAX_MODEL_NAME_LENGTH:
-            raise ValueError("Model name is too long")
-        if len(display_name) > self.limits.MAX_DISPLAY_NAME_LENGTH:
-            raise ValueError("Display name is too long")
-        return await self.profiles.create(
+        except Exception as error:
+            _audit_profile_event(
+                "create",
+                user_id,
+                result="failed",
+                provider=provider,
+                error_category=_error_category(error),
+            )
+            raise
+        _audit_profile_event(
+            "create",
             user_id,
-            provider,
-            model_name,
-            display_name,
-            api_key,
+            result="succeeded",
+            profile_id=profile.id,
+            provider=profile.provider,
         )
+        return profile
 
     async def activate(self, user_id: int, profile_id: int) -> UserModelProfile:
-        profile = await self.profiles.activate(user_id, profile_id)
+        try:
+            profile = await self.profiles.activate(user_id, profile_id)
+        except Exception as error:
+            _audit_profile_event(
+                "activate",
+                user_id,
+                result="failed",
+                profile_id=profile_id,
+                error_category=_error_category(error),
+            )
+            raise
         UserModelFactory.invalidate_user(user_id)
+        _audit_profile_event(
+            "activate",
+            user_id,
+            result="succeeded",
+            profile_id=profile.id,
+            provider=profile.provider,
+        )
         return profile
 
     async def delete(self, user_id: int, profile_id: int) -> bool:
-        deleted = await self.profiles.delete(user_id, profile_id)
+        try:
+            deleted = await self.profiles.delete(user_id, profile_id)
+        except Exception as error:
+            _audit_profile_event(
+                "delete",
+                user_id,
+                result="failed",
+                profile_id=profile_id,
+                error_category=_error_category(error),
+            )
+            raise
         if deleted:
             UserModelFactory.invalidate_user(user_id)
+            _audit_profile_event(
+                "delete",
+                user_id,
+                result="succeeded",
+                profile_id=profile_id,
+            )
+        else:
+            _audit_profile_event(
+                "delete",
+                user_id,
+                result="not_found",
+                profile_id=profile_id,
+            )
         return deleted
 
 
