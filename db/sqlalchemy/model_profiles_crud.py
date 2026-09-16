@@ -39,7 +39,7 @@ class ModelProfilesORM(ModelProfilesBase):
         provider: ModelProvider,
         model_name: str,
         display_name: str,
-        encrypted_api_key: str | None,
+        api_key: str | None,
     ) -> UserModelProfile:
         profile = ModelProfile(
             user_id=user_id,
@@ -47,8 +47,8 @@ class ModelProfilesORM(ModelProfilesBase):
             model_name=model_name,
             display_name=display_name,
             encrypted_api_key=(
-                self.cipher.encrypt(encrypted_api_key)
-                if encrypted_api_key is not None
+                self.cipher.encrypt(api_key)
+                if api_key is not None
                 else None
             ),
             is_active=False,

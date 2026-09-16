@@ -167,7 +167,7 @@ class ComprehensiveTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_model_profile_service_requires_keys_only_for_user_managed_providers(self):
         class Profiles:
-            async def create(self, user_id, provider, model_name, display_name, encrypted_api_key):
+            async def create(self, user_id, provider, model_name, display_name, api_key):
                 return UserModelProfile(1, user_id, provider, model_name, display_name, False)
 
             async def list_for_user(self, user_id):
@@ -188,6 +188,14 @@ class ComprehensiveTests(unittest.IsolatedAsyncioTestCase):
         service = ModelProfileService(Profiles())
         with self.assertRaises(ValueError):
             await service.add(1, ModelProvider.OPENAI, "gpt-4o-mini", "OpenAI")
+        with self.assertRaises(ValueError):
+            await service.add(
+                1,
+                ModelProvider.OPENAI,
+                "gpt-4o-mini",
+                "OpenAI",
+                api_key="   ",
+            )
 
         profile = await service.add(
             1,

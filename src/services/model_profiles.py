@@ -36,10 +36,12 @@ class ModelProfileService:
         adapter = self.registry.get(provider)
         if adapter.capabilities.developer_managed:
             api_key = None
-        elif not api_key:
+        elif not api_key or not api_key.strip():
             raise ProviderConfigurationError(
                 f"{adapter.capabilities.display_name} requires your API key"
             )
+        elif api_key is not None:
+            api_key = api_key.strip()
         model_name = model_name.strip()
         display_name = display_name.strip() or model_name
         if not model_name:

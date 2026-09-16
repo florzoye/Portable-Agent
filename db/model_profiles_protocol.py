@@ -16,7 +16,7 @@ class ModelProfilesBase(ABC):
         provider: ModelProvider,
         model_name: str,
         display_name: str,
-        encrypted_api_key: str | None,
+        api_key: str | None,
     ) -> UserModelProfile:
         ...
 
