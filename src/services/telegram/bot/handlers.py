@@ -42,6 +42,41 @@ def _model_setup_key(tg_id: int) -> str:
     return f"model_setup:{tg_id}"
 
 
+def _setup_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="⬅️ Назад к моделям",
+                    callback_data="model:back",
+                ),
+                InlineKeyboardButton(
+                    text="❌ Отмена",
+                    callback_data="model:cancel",
+                ),
+            ]
+        ]
+    )
+
+
+def _setup_prompt(provider: str, step: str) -> str:
+    labels = {
+        "openai": "OpenAI",
+        "xai": "xAI",
+        "ollama": "Ollama разработчика",
+    }
+    if step == "api_key":
+        return (
+            f"Шаг 2/2: отправьте API-ключ для {labels.get(provider, provider)}.\n"
+            "Ключ не будет показан обратно и сохранится в зашифрованном виде."
+        )
+    return (
+        f"Шаг 1/2: настройка {labels.get(provider, provider)}.\n"
+        "Напишите точное имя модели.\n"
+        "Для возврата нажмите «Назад», для отмены — «Отмена»."
+    )
+
+
 async def _model_profiles(tg_id: int):
     return await get_model_profiles().list(tg_id)
 
@@ -155,22 +190,44 @@ def register_handlers(dp: Dispatcher):
             600,
             json.dumps({"provider": provider, "step": "model"}),
         )
-        labels = {
-            "openai": "OpenAI",
-            "xai": "xAI",
-            "ollama": "Ollama разработчика",
-        }
         await callback.message.answer(
-            f"Добавляем {labels.get(provider, provider)}.\n"
-            "Напишите точное имя модели (например: gpt-4o-mini, grok-3-mini или llama3.2).\n"
-            "Для отмены напишите /cancel."
+            _setup_prompt(provider, "model"),
+            reply_markup=_setup_keyboard(),
+        )
+        await callback.answer()
+
+    @dp.callback_query(F.data == "model:cancel")
+    async def handle_model_cancel_callback(callback: CallbackQuery):
+        await get_config().redis_client.delete(
+            _model_setup_key(callback.from_user.id)
+        )
+        await callback.message.edit_text("Настройка модели отменена.")
+        await callback.answer()
+
+    @dp.callback_query(F.data == "model:back")
+    async def handle_model_back(callback: CallbackQuery):
+        await get_config().redis_client.delete(
+            _model_setup_key(callback.from_user.id)
+        )
+        await callback.message.answer(
+            "Выберите действие в разделе моделей.",
+            reply_markup=await _model_keyboard(callback.from_user.id),
         )
         await callback.answer()
 
     @dp.callback_query(F.data.startswith("model:activate:"))
     async def handle_model_activate(callback: CallbackQuery):
         profile_id = int(callback.data.rsplit(":", 1)[1])
-        profile = await get_model_profiles().activate(callback.from_user.id, profile_id)
+        try:
+            profile = await get_model_profiles().activate(
+                callback.from_user.id, profile_id
+            )
+        except (ValueError, RuntimeError):
+            await callback.answer("Модель больше недоступна. Обновите список.", show_alert=True)
+            await callback.message.edit_reply_markup(
+                reply_markup=await _model_keyboard(callback.from_user.id)
+            )
+            return
         AgentsFactory.reset(tg_id=callback.from_user.id)
         await callback.message.edit_reply_markup(
             reply_markup=await _model_keyboard(callback.from_user.id)
@@ -180,7 +237,16 @@ def register_handlers(dp: Dispatcher):
     @dp.callback_query(F.data.startswith("model:delete:"))
     async def handle_model_delete(callback: CallbackQuery):
         profile_id = int(callback.data.rsplit(":", 1)[1])
-        deleted = await get_model_profiles().delete(callback.from_user.id, profile_id)
+        try:
+            deleted = await get_model_profiles().delete(
+                callback.from_user.id, profile_id
+            )
+        except (ValueError, RuntimeError):
+            await callback.answer("Модель больше недоступна. Обновите список.", show_alert=True)
+            await callback.message.edit_reply_markup(
+                reply_markup=await _model_keyboard(callback.from_user.id)
+            )
+            return
         if deleted:
             AgentsFactory.reset(tg_id=callback.from_user.id)
         await callback.message.edit_reply_markup(
@@ -245,28 +311,42 @@ def register_handlers(dp: Dispatcher):
                 if setup["step"] == "model":
                     setup["model_name"] = text
                     if setup["provider"] == "ollama":
-                        profile = await get_model_profiles().add(
-                            tg_id, ModelProvider.OLLAMA, text, text
-                        )
-                        await get_model_profiles().activate(tg_id, profile.id)
+                        try:
+                            profile = await get_model_profiles().add(
+                                tg_id, ModelProvider.OLLAMA, text, text
+                            )
+                            await get_model_profiles().activate(tg_id, profile.id)
+                        except (ProviderConfigurationError, ValueError, RuntimeError):
+                            await message.answer(
+                                "Не удалось добавить модель. Проверьте имя и попробуйте ещё раз.",
+                                reply_markup=_setup_keyboard(),
+                            )
+                            return
                         await cfg.redis_client.delete(_model_setup_key(tg_id))
-                        await message.answer(f"✅ Ollama-модель {text} добавлена и активирована.")
+                        await message.answer(f"✅ Шаг 2/2 завершён: Ollama-модель {text} добавлена и активирована.")
                     else:
                         setup["step"] = "api_key"
                         await cfg.redis_client.setex(
                             _model_setup_key(tg_id), 600, json.dumps(setup)
                         )
                         await message.answer(
-                            "Теперь отправьте API-ключ одним сообщением.\n"
-                            "Он не будет показан обратно и сохранится в зашифрованном виде."
+                            _setup_prompt(setup["provider"], "api_key"),
+                            reply_markup=_setup_keyboard(),
                         )
                     return
                 if setup["step"] == "api_key":
                     provider = ModelProvider(setup["provider"])
-                    profile = await get_model_profiles().add(
-                        tg_id, provider, setup["model_name"], setup["model_name"], text
-                    )
-                    await get_model_profiles().activate(tg_id, profile.id)
+                    try:
+                        profile = await get_model_profiles().add(
+                            tg_id, provider, setup["model_name"], setup["model_name"], text
+                        )
+                        await get_model_profiles().activate(tg_id, profile.id)
+                    except (ProviderConfigurationError, ValueError, RuntimeError):
+                        await message.answer(
+                            "Не удалось сохранить профиль. Проверьте API-ключ и попробуйте ещё раз.",
+                            reply_markup=_setup_keyboard(),
+                        )
+                        return
                     await cfg.redis_client.delete(_model_setup_key(tg_id))
                     try:
                         await message.delete()

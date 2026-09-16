@@ -15,6 +15,7 @@ from src.services.web.app import (
     _acquire_provider_diagnostic_slot,
     _get_session_context,
 )
+from src.services.telegram.bot.handlers import _setup_keyboard, _setup_prompt
 from src.services.web.one_time_code import (
     generate_login_code,
     normalize_login_code,
@@ -94,6 +95,13 @@ class ComprehensiveTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertRegex(code, r"^\d{8}$")
         self.assertEqual(normalize_login_code(f"  {code} "), code)
+
+    def test_telegram_model_wizard_has_progress_and_navigation(self):
+        keyboard = _setup_keyboard()
+        self.assertEqual(keyboard.inline_keyboard[0][0].text, "⬅️ Назад к моделям")
+        self.assertEqual(keyboard.inline_keyboard[0][1].text, "❌ Отмена")
+        self.assertIn("Шаг 1/2", _setup_prompt("openai", "model"))
+        self.assertIn("Шаг 2/2", _setup_prompt("openai", "api_key"))
 
     def test_mcp_success_result_keeps_machine_data(self):
         result = tool_success("created", {"event_id": "event-1"})
