@@ -366,9 +366,8 @@ async def current_user(portable_session: str | None = Cookie(default=None)):
     return {"user_id": user_id}
 
 
-@app.post("/session/{session_id}/model")
+@app.post("/session/model")
 async def select_model(
-    session_id: str,
     body: SelectModelRequest,
     portable_session: str | None = Cookie(default=None),
 ):
@@ -381,9 +380,8 @@ async def select_model(
     return {"session_id": thread_id, "active_model": body.model_id}
 
 
-@app.get("/session/{session_id}/model")
+@app.get("/session/model")
 async def current_model(
-    session_id: str,
     portable_session: str | None = Cookie(default=None),
 ):
     user_id, thread_id = await _get_session_context(portable_session)
@@ -398,8 +396,8 @@ async def current_model(
     }
 
 
-@app.websocket("/ws/{session_id}")
-async def websocket_chat(websocket: WebSocket, session_id: str):
+@app.websocket("/ws")
+async def websocket_chat(websocket: WebSocket):
     portable_session = websocket.cookies.get(SESSION_COOKIE)
     try:
         user_id, thread_id = await _get_session_context(portable_session)
@@ -464,7 +462,7 @@ async def websocket_chat(websocket: WebSocket, session_id: str):
                 })
 
     except WebSocketDisconnect:
-        logger.info(f"WebSocket disconnected: session={session_id}")
+        logger.info(f"WebSocket disconnected: session={thread_id}")
     finally:
         listener_task.cancel()
         with suppress(asyncio.CancelledError):

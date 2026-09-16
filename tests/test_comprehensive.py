@@ -125,6 +125,40 @@ class ComprehensiveTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((user_id, thread_id), (42, "server-thread"))
         self.assertEqual(len(redis.expired), 2)
 
+    async def test_profile_transport_uses_cookie_owned_tenant(self):
+        redis = FakeRedis({
+            "web_session:auth-session": "42",
+            "web_session_thread:auth-session": "server-thread",
+        })
+        config = type("Config", (), {"redis_client": redis})()
+
+        class ProfileApplication:
+            def __init__(self):
+                self.user_ids = []
+
+            async def list(self, user_id):
+                self.user_ids.append(user_id)
+                return [
+                    UserModelProfile(
+                        id=11,
+                        user_id=user_id,
+                        provider=ModelProvider.OLLAMA,
+                        model_name="llama",
+                        display_name="Tenant model",
+                        is_active=True,
+                    )
+                ]
+
+        application = ProfileApplication()
+        with patch("src.services.web.app.get_config", return_value=config), patch(
+            "src.services.web.app.get_model_profiles",
+            return_value=application,
+        ):
+            result = await list_model_profiles("auth-session")
+
+        self.assertEqual(result["profiles"][0]["id"], 11)
+        self.assertEqual(application.user_ids, [42])
+
     async def test_missing_session_is_rejected(self):
         redis = FakeRedis()
         config = type("Config", (), {"redis_client": redis})()

@@ -433,8 +433,8 @@ Both the Telegram bot and the Web UI share the same **LangGraph ReAct agent** wi
 A browser-based chat interface that mirrors the Telegram bot experience.
 
 - Served at `http://localhost:8080` in dev mode (container port 8000, mapped via override)
-- Communicates with the agent over WebSocket (`/ws/{session_id}`)
-- Session ID is a random 8-digit number, generated in the browser and stored in `sessionStorage`
+- Communicates with the agent over the authenticated WebSocket (`/ws`)
+- The UI keeps a random 8-digit chat label in `sessionStorage`; authentication and agent thread ownership come from the `portable_session` cookie
 - Agent responses are rendered as HTML (markdown converted server-side)
 - Shares the same MCP tools, LLM, and PostgreSQL checkpointer as the Telegram bot
 

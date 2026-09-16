@@ -444,7 +444,7 @@
       const [modelsRes, profilesRes, curRes] = await Promise.all([
         fetch("/models"),
         fetch("/model-profiles"),
-        fetch(`/session/${SESSION_ID}/model`),
+        fetch("/session/model"),
       ]);
       if (curRes.status === 401) throw new Error("AUTH_REQUIRED");
       const { models }       = await modelsRes.json();
@@ -593,7 +593,7 @@
         return;
       }
       const fallbackId = modelId.slice("fallback:".length);
-      const res = await fetch(`/session/${SESSION_ID}/model`, {
+      const res = await fetch("/session/model", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ model_id: fallbackId }),
@@ -614,7 +614,7 @@
   // ── WebSocket ─────────────────────────────────────────────────────────────
   function connect() {
     const proto = location.protocol === "https:" ? "wss" : "ws";
-    ws = new WebSocket(`${proto}://${location.host}/ws/${SESSION_ID}`);
+    ws = new WebSocket(`${proto}://${location.host}/ws`);
 
     ws.onopen = () => {
       statusDot.classList.add("connected");
