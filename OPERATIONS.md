@@ -37,27 +37,30 @@ services must remain on the internal Docker network and continue to require
 2. Restrict `.env` permissions and load secrets through the platform secret
    manager when available. Never reuse development credentials.
 
-3. Start infrastructure and wait for PostgreSQL and Redis health checks:
+3. Start only infrastructure and wait for PostgreSQL and Redis health checks:
+
+   ```bash
+   docker compose -f docker-compose.yml up -d postgres redis
+   ```
+
+4. Run the schema upgrade and check before starting application traffic. The
+   one-off command uses the same image/environment as the Web service but does
+   not start a listener:
+
+   ```bash
+   docker compose -f docker-compose.yml -f docker-compose.apps.yml run \
+     --rm --no-deps web-assistant \
+     uv run python -m db.sqlalchemy.migration_cli upgrade
+   docker compose -f docker-compose.yml -f docker-compose.apps.yml run \
+     --rm --no-deps web-assistant \
+     uv run python -m db.sqlalchemy.migration_cli check
+   ```
+
+5. Start the core, application, and worker services:
 
    ```bash
    docker compose -f docker-compose.yml -f docker-compose.core.yml \
      -f docker-compose.apps.yml -f docker-compose.workers.yml up -d
-   ```
-
-4. Run the schema check before serving traffic:
-
-   ```bash
-   docker compose exec web-assistant \
-     uv run python -m db.sqlalchemy.migration_cli check
-   ```
-
-5. Upgrade a new or pending database, then check it again:
-
-   ```bash
-   docker compose exec web-assistant \
-     uv run python -m db.sqlalchemy.migration_cli upgrade
-   docker compose exec web-assistant \
-     uv run python -m db.sqlalchemy.migration_cli check
    ```
 
 6. Verify `/health` for Web and monitoring, then send a test Telegram
@@ -68,12 +71,24 @@ idempotent, but only one deployment job should perform an upgrade at a time.
 
 ## Backup and recovery
 
+Load the production env file into the current shell before running the
+commands below, without printing it:
+
+```bash
+set -a
+. ./.env
+set +a
+test -n "$DB_USER" && test -n "$DB_NAME"
+docker compose exec -T postgres pg_isready -U "$DB_USER" -d "$DB_NAME"
+```
+
 Create a consistent PostgreSQL backup before every migration and before
 rotating secrets:
 
 ```bash
 docker compose exec -T postgres pg_dump \
-  -U "$DB_USER" -d "$DB_NAME" --format=custom \
+  -U "${DB_USER:?DB_USER is required}" \
+  -d "${DB_NAME:?DB_NAME is required}" --format=custom \
   > backups/portableagent-$(date -u +%Y%m%dT%H%M%SZ).dump
 ```
 
@@ -86,7 +101,8 @@ To restore into a stopped application stack:
 docker compose stop web-assistant telegram-bot celery-worker celery-beat
 cat backups/portableagent-YYYYMMDDTHHMMSSZ.dump | \
   docker compose exec -T postgres pg_restore \
-    -U "$DB_USER" -d "$DB_NAME" --clean --if-exists
+    -U "${DB_USER:?DB_USER is required}" \
+    -d "${DB_NAME:?DB_NAME is required}" --clean --if-exists
 docker compose exec web-assistant \
   uv run python -m db.sqlalchemy.migration_cli check
 docker compose start web-assistant telegram-bot celery-worker celery-beat
