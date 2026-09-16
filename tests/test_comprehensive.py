@@ -18,7 +18,7 @@ from src.services.web.one_time_code import (
 )
 from utils.observability import emit_event, timed_event
 from utils.token_usage import extract_token_usage
-from src.services.model_profiles import ModelProfileService
+from src.services.model_profiles import ModelProfileApplication, ModelProfileService
 from src.services.models.providers import ModelProvider, UserModelProfile
 
 
@@ -205,6 +205,55 @@ class ComprehensiveTests(unittest.IsolatedAsyncioTestCase):
             api_key="must-be-ignored",
         )
         self.assertEqual(profile.provider, ModelProvider.OLLAMA)
+
+    async def test_model_profile_application_initializes_telegram_tenant(self):
+        class Users:
+            def __init__(self):
+                self.ids = set()
+
+            async def get_user_by_tg_id(self, tg_id):
+                return object() if tg_id in self.ids else None
+
+            async def add_user(self, tg_id, **kwargs):
+                self.ids.add(tg_id)
+                return object()
+
+        class Profiles:
+            async def create(self, user_id, provider, model_name, display_name, api_key):
+                return UserModelProfile(
+                    1, user_id, provider, model_name, display_name, False
+                )
+
+        class Transaction:
+            async def __aenter__(self):
+                return object()
+
+            async def __aexit__(self, *args):
+                return False
+
+        class Database:
+            def __init__(self):
+                self.users = Users()
+                self.profiles = Profiles()
+
+            def transaction(self):
+                return Transaction()
+
+            def get_users_repo(self, session):
+                return self.users
+
+            def get_model_profiles_repo(self, session):
+                return self.profiles
+
+        application = ModelProfileApplication(Database())
+        profile = await application.add(
+            777,
+            ModelProvider.OLLAMA,
+            "llama3.2",
+            "Developer Ollama",
+        )
+
+        self.assertEqual(profile.user_id, 777)
 
     async def test_model_profiles_repository_isolates_users_and_encrypts_keys(self):
         from cryptography.fernet import Fernet

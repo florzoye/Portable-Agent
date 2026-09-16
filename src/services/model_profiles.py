@@ -2,6 +2,7 @@ from collections.abc import Sequence
 
 from db.model_profiles_protocol import ModelProfilesBase
 from db.database import Database
+from db.database_protocol import UsersBase
 from src.agents.providers.base import ProviderConfigurationError
 from src.agents.providers.registry import ProviderRegistry
 from src.services.models.providers import (
@@ -68,6 +69,13 @@ class ModelProfileApplication:
     def __init__(self, database: Database):
         self.database = database
 
+    async def _ensure_user(self, session, tg_id: int) -> None:
+        users: UsersBase = self.database.get_users_repo(session)
+        if await users.get_user_by_tg_id(tg_id) is not None:
+            return
+        if await users.add_user(tg_id) is None:
+            raise RuntimeError(f"Unable to initialize tenant {tg_id}")
+
     async def list(self, user_id: int) -> Sequence[UserModelProfile]:
         async with self.database.transaction() as session:
             return await ModelProfileService(
@@ -83,6 +91,7 @@ class ModelProfileApplication:
         api_key: str | None = None,
     ) -> UserModelProfile:
         async with self.database.transaction() as session:
+            await self._ensure_user(session, user_id)
             return await ModelProfileService(
                 self.database.get_model_profiles_repo(session)
             ).add(user_id, provider, model_name, display_name, api_key)
