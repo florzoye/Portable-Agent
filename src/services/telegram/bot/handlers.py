@@ -5,7 +5,14 @@ from aiogram.filters import Command
 from aiogram import Bot, Dispatcher, F
 from aiogram.enums import ContentType, ParseMode
 from aiogram.exceptions import TelegramAPIError
-from aiogram.types import CallbackQuery, Message, InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import (
+    CallbackQuery,
+    KeyboardButton,
+    Message,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    ReplyKeyboardMarkup,
+)
 
 from src.agents.chat import AgentInvoker
 from src.factories.tools_factory import get_tools
@@ -56,6 +63,20 @@ def _setup_keyboard() -> InlineKeyboardMarkup:
                 ),
             ]
         ]
+    )
+
+
+def _main_keyboard() -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text="💬 Чат"), KeyboardButton(text="🤖 Модели")],
+            [KeyboardButton(text="📅 Календарь"), KeyboardButton(text="⏰ Напоминания")],
+            [KeyboardButton(text="ℹ️ Помощь"), KeyboardButton(text="⚙️ Настройки")],
+            [KeyboardButton(text="❌ Отмена")],
+        ],
+        resize_keyboard=True,
+        is_persistent=True,
+        input_field_placeholder="Выберите действие или напишите сообщение",
     )
 
 
@@ -164,6 +185,13 @@ async def send_message(tg_id: int, text: str) -> None:
 
 def register_handlers(dp: Dispatcher):
 
+    @dp.message(Command("start"))
+    async def handle_start(message: Message):
+        await message.answer(
+            "Добро пожаловать! Выберите раздел или напишите сообщение.",
+            reply_markup=_main_keyboard(),
+        )
+
     @dp.message(Command("web"))
     async def handle_web_login(message: Message):
         code = generate_login_code()
@@ -181,6 +209,55 @@ def register_handlers(dp: Dispatcher):
     @dp.message(Command("models"))
     async def handle_models(message: Message):
         await _send_models(message)
+
+    @dp.message(F.text == "🤖 Модели")
+    async def handle_models_button(message: Message):
+        await _send_models(message)
+
+    @dp.message(F.text == "💬 Чат")
+    async def handle_chat_button(message: Message):
+        await message.answer(
+            "Режим чата включён. Напишите сообщение.",
+            reply_markup=_main_keyboard(),
+        )
+
+    @dp.message(F.text == "📅 Календарь")
+    async def handle_calendar_button(message: Message):
+        await message.answer(
+            "Календарь доступен через чат. Например: «создай событие завтра в 10:00».",
+            reply_markup=_main_keyboard(),
+        )
+
+    @dp.message(F.text == "⏰ Напоминания")
+    async def handle_reminders_button(message: Message):
+        await message.answer(
+            "Напоминания доступны через чат. Например: «напомни позвонить через час».",
+            reply_markup=_main_keyboard(),
+        )
+
+    @dp.message(F.text == "ℹ️ Помощь")
+    async def handle_help_button(message: Message):
+        await message.answer(
+            "Напишите запрос обычным текстом. В разделе «Модели» можно "
+            "добавить или активировать профиль. /web открывает Web UI.",
+            reply_markup=_main_keyboard(),
+        )
+
+    @dp.message(F.text == "⚙️ Настройки")
+    async def handle_settings_button(message: Message):
+        await message.answer(
+            "Настройки модели находятся в разделе «Модели». "
+            "Для входа в Web UI используйте /web.",
+            reply_markup=_main_keyboard(),
+        )
+
+    @dp.message(F.text == "❌ Отмена")
+    async def handle_cancel_button(message: Message):
+        await get_config().redis_client.delete(_model_setup_key(message.from_user.id))
+        await message.answer(
+            "Текущая операция отменена.",
+            reply_markup=_main_keyboard(),
+        )
 
     @dp.callback_query(F.data.startswith("model:add:"))
     async def handle_model_add(callback: CallbackQuery):

@@ -129,6 +129,25 @@ class ComprehensiveTests(unittest.IsolatedAsyncioTestCase):
         )[2]
         self.assertIn("await message.delete()", failure_branch)
 
+    def test_telegram_main_keyboard_exposes_core_navigation(self):
+        from pathlib import Path
+
+        source = Path("src/services/telegram/bot/handlers.py").read_text(
+            encoding="utf-8"
+        )
+        for label in (
+            "💬 Чат",
+            "🤖 Модели",
+            "📅 Календарь",
+            "⏰ Напоминания",
+            "ℹ️ Помощь",
+            "⚙️ Настройки",
+            "❌ Отмена",
+        ):
+            self.assertIn(label, source)
+        self.assertIn('@dp.message(Command("start"))', source)
+        self.assertIn("is_persistent=True", source)
+
     def test_mcp_success_result_keeps_machine_data(self):
         result = tool_success("created", {"event_id": "event-1"})
 
