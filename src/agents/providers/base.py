@@ -68,6 +68,21 @@ class ProviderAdapter(ABC):
     async def create_model(self, context: ProviderContext) -> BaseChatModel:
         ...
 
+    async def health_check(
+        self,
+        context: ProviderContext,
+        check_upstream: bool = False,
+    ) -> None:
+        await self.validate(context)
+        if check_upstream:
+            model = await self.create_model(context)
+            try:
+                await model.ainvoke("Reply with OK.")
+            except ProviderError:
+                raise
+            except Exception as error:
+                raise normalize_provider_error(error) from error
+
     def validate_configuration(self, context: ProviderContext) -> None:
         if self.capabilities.requires_user_api_key and not context.api_key:
             raise ProviderConfigurationError(

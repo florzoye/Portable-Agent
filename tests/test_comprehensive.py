@@ -19,7 +19,11 @@ from src.services.web.one_time_code import (
 from utils.observability import emit_event, timed_event
 from utils.token_usage import extract_token_usage
 from src.services.model_profiles import ModelProfileApplication, ModelProfileService
-from src.services.models.providers import ModelProvider, UserModelProfile
+from src.services.models.providers import (
+    ModelProvider,
+    ProviderCapabilities,
+    UserModelProfile,
+)
 from src.agents.providers.base import (
     ProviderRequestError,
     ProviderTimeoutError,
@@ -382,6 +386,66 @@ class ComprehensiveTests(unittest.IsolatedAsyncioTestCase):
                     },
                 )(),
             ).add(1, ModelProvider.OLLAMA, "ok", "ok")
+
+    async def test_model_profile_diagnostics_are_safe_and_can_check_upstream(self):
+        class Profiles:
+            async def list_for_user(self, user_id):
+                return [
+                    UserModelProfile(
+                        7, user_id, ModelProvider.OLLAMA, "llama3.2", "Ollama", True
+                    )
+                ]
+
+            async def get_api_key(self, user_id, profile_id):
+                return None
+
+        class Adapter(ProviderAdapter):
+            capabilities = ProviderCapabilities(
+                ModelProvider.OLLAMA, "Ollama", False, developer_managed=True
+            )
+
+            def __init__(self):
+                self.checked = []
+
+            async def validate(self, context):
+                self.checked.append(False)
+
+            async def create_model(self, context):
+                return object()
+
+            async def health_check(self, context, check_upstream=False):
+                self.checked.append(check_upstream)
+
+        adapter = Adapter()
+        registry = type(
+            "Registry",
+            (),
+            {
+                "get": lambda self, provider: adapter,
+            },
+        )()
+        service = ModelProfileService(
+            Profiles(),
+            registry=registry,
+            limits=type(
+                "Limits",
+                (),
+                {
+                    "MAX_MODEL_PROFILES": 10,
+                    "MAX_MODEL_NAME_LENGTH": 200,
+                    "MAX_DISPLAY_NAME_LENGTH": 200,
+                },
+            )(),
+        )
+
+        local = await service.diagnose(42, 7)
+        upstream = await service.diagnose(42, 7, check_upstream=True)
+
+        self.assertEqual(local.status, "healthy")
+        self.assertFalse(local.upstream_checked)
+        self.assertEqual(upstream.message, "Провайдер отвечает")
+        self.assertTrue(upstream.upstream_checked)
+        self.assertEqual(adapter.checked, [False, True])
 
     async def test_model_profile_application_initializes_telegram_tenant(self):
         class Users:

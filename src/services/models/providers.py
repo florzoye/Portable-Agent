@@ -27,6 +27,16 @@ class UserModelProfile:
 
 
 @dataclass(frozen=True, slots=True)
+class ProviderDiagnostic:
+    profile_id: int
+    provider: ModelProvider
+    model_name: str
+    status: str
+    message: str
+    upstream_checked: bool
+
+
+@dataclass(frozen=True, slots=True)
 class DeveloperModelProfile:
     provider: ModelProvider
     model_name: str

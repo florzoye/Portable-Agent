@@ -6,7 +6,12 @@ from db.database_protocol import UsersBase
 from data import get_config
 from src.agents.providers.factory import UserModelFactory
 from data.configs.tenant_config import TenantLimitsConfig
-from src.agents.providers.base import ProviderConfigurationError
+from src.agents.providers.base import (
+    ProviderConfigurationError,
+    ProviderError,
+    ProviderContext,
+    provider_user_message,
+)
 from src.agents.providers.registry import ProviderRegistry
 from src.services.models.providers import (
     ModelProvider,
@@ -33,6 +38,49 @@ class ModelProfileService:
 
     async def list(self, user_id: int) -> Sequence[UserModelProfile]:
         return await self.profiles.list_for_user(user_id)
+
+    async def diagnose(
+        self,
+        user_id: int,
+        profile_id: int,
+        check_upstream: bool = False,
+    ):
+        from src.services.models.providers import ProviderDiagnostic
+
+        profile = next(
+            (
+                item
+                for item in await self.profiles.list_for_user(user_id)
+                if item.id == profile_id
+            ),
+            None,
+        )
+        if profile is None:
+            raise ValueError("Model profile not found")
+        api_key = await self.profiles.get_api_key(user_id, profile_id)
+        adapter = self.registry.get(profile.provider)
+        context = ProviderContext(user_id, profile.model_name, api_key)
+        try:
+            await adapter.health_check(context, check_upstream)
+        except ProviderError as error:
+            return ProviderDiagnostic(
+                profile.id,
+                profile.provider,
+                profile.model_name,
+                "unhealthy",
+                provider_user_message(error),
+                check_upstream,
+            )
+        return ProviderDiagnostic(
+            profile.id,
+            profile.provider,
+            profile.model_name,
+            "healthy",
+            "Конфигурация корректна"
+            if not check_upstream
+            else "Провайдер отвечает",
+            check_upstream,
+        )
 
     async def add(
         self,
@@ -103,6 +151,17 @@ class ModelProfileApplication:
     async def list(self, user_id: int) -> Sequence[UserModelProfile]:
         async with self.database.transaction() as session:
             return await self._service(session).list(user_id)
+
+    async def diagnose(
+        self,
+        user_id: int,
+        profile_id: int,
+        check_upstream: bool = False,
+    ):
+        async with self.database.transaction() as session:
+            return await self._service(session).diagnose(
+                user_id, profile_id, check_upstream
+            )
 
     async def add(
         self,

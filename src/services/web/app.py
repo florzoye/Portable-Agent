@@ -182,6 +182,29 @@ async def list_model_providers(
     }
 
 
+@app.post("/model-profiles/{profile_id}/diagnose")
+async def diagnose_model_profile(
+    profile_id: int,
+    check_upstream: bool = False,
+    portable_session: str | None = Cookie(default=None),
+):
+    user_id, _ = await _get_session_context(portable_session)
+    try:
+        result = await get_model_profiles().diagnose(
+            user_id, profile_id, check_upstream
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {
+        "profile_id": result.profile_id,
+        "provider": result.provider.value,
+        "model_name": result.model_name,
+        "status": result.status,
+        "message": result.message,
+        "upstream_checked": result.upstream_checked,
+    }
+
+
 @app.post("/model-profiles")
 async def create_model_profile(
     body: CreateModelProfileRequest,
