@@ -39,6 +39,10 @@ class ModelProfileService:
     async def list(self, user_id: int) -> Sequence[UserModelProfile]:
         return await self.profiles.list_for_user(user_id)
 
+    async def create_active_model(self, user_id: int):
+        factory = UserModelFactory(self.profiles, self.registry)
+        return await factory.create_active(user_id)
+
     async def diagnose(
         self,
         user_id: int,
@@ -151,6 +155,10 @@ class ModelProfileApplication:
     async def list(self, user_id: int) -> Sequence[UserModelProfile]:
         async with self.database.transaction() as session:
             return await self._service(session).list(user_id)
+
+    async def create_active_model(self, user_id: int):
+        async with self.database.transaction() as session:
+            return await self._service(session).create_active_model(user_id)
 
     async def diagnose(
         self,

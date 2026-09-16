@@ -40,7 +40,6 @@ from src.services.dependencies import get_model_profiles
 from src.services.models.providers import ModelProvider
 from src.agents.providers.base import ProviderConfigurationError
 from src.agents.providers.base import provider_user_message
-from src.agents.providers.registry import ProviderRegistry
 
 STATIC_DIR = pathlib.Path(__file__).parent / "static"
 SESSION_COOKIE = "portable_session"
@@ -190,7 +189,7 @@ async def list_model_providers(
                 "requires_api_key": capability.requires_user_api_key,
                 "developer_managed": capability.developer_managed,
             }
-            for capability in ProviderRegistry().capabilities()
+            for capability in get_model_profiles().available_providers()
         ]
     }
 

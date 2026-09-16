@@ -588,6 +588,44 @@ class ComprehensiveTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(profile.user_id, 777)
 
+    async def test_model_profile_application_owns_active_model_factory(self):
+        class Profiles:
+            async def get_active(self, user_id):
+                return None
+
+        class Transaction:
+            async def __aenter__(self):
+                return object()
+
+            async def __aexit__(self, *args):
+                return False
+
+        class Database:
+            def transaction(self):
+                return Transaction()
+
+            def get_model_profiles_repo(self, session):
+                return Profiles()
+
+        config = type(
+            "Config",
+            (),
+            {
+                "TENANT_LIMITS": type(
+                    "Limits",
+                    (),
+                    {
+                        "MAX_MODEL_PROFILES": 10,
+                        "MAX_MODEL_NAME_LENGTH": 200,
+                        "MAX_DISPLAY_NAME_LENGTH": 200,
+                    },
+                )()
+            },
+        )()
+        with patch("src.services.model_profiles.get_config", return_value=config):
+            application = ModelProfileApplication(Database())
+            self.assertIsNone(await application.create_active_model(42))
+
     async def test_model_profiles_repository_isolates_users_and_encrypts_keys(self):
         from cryptography.fernet import Fernet
         from db.sqlalchemy.models import Base, Users

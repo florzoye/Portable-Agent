@@ -7,7 +7,6 @@ from src.agents.prompts.system import AgentSystemPrompt
 from src.factories.checkpointer_factory import get_checkpointer
 from src.factories.tools_factory import get_tools
 from db.database import global_db_manager
-from src.agents.providers.factory import UserModelFactory
 from src.services.model_profiles import ModelProfileApplication
 
 _session_models: dict[str, BaseChatModel] = {}
@@ -36,9 +35,7 @@ def get_session_model(session_id: str) -> BaseChatModel:
 
 
 async def get_user_model(user_id: int) -> BaseChatModel | None:
-    async with global_db_manager.transaction() as session:
-        profiles = global_db_manager.get_model_profiles_repo(session)
-        return await UserModelFactory(profiles).create_active(user_id)
+    return await _model_profiles.create_active_model(user_id)
 
 
 async def get_agent(session_id: str, user_id: int | None = None) -> CompiledStateGraph:
