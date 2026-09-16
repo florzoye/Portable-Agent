@@ -2,7 +2,10 @@ import pathlib
 import asyncio
 import os
 import secrets
+import time
+from collections import deque
 from contextlib import asynccontextmanager
+from contextlib import suppress
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Request, Response, Cookie
 from fastapi.responses import HTMLResponse 
@@ -40,7 +43,10 @@ SESSION_KEY_PREFIX = "web_session:"
 SESSION_THREAD_PREFIX = "web_session_thread:"
 MAX_WEBSOCKET_MESSAGE_SIZE = 4000
 AGENT_INVOKE_TIMEOUT = 120
+WEBSOCKET_RATE_WINDOW = 60
+WEBSOCKET_RATE_LIMIT = 30
 _THREAD_LOCKS: dict[str, asyncio.Lock] = {}
+_THREAD_MESSAGE_TIMES: dict[str, deque[float]] = {}
 
 
 def _model_id(llm) -> str:
@@ -254,6 +260,7 @@ async def websocket_chat(websocket: WebSocket, session_id: str):
 
     listener_task = asyncio.create_task(_redis_listener(thread_id, websocket))
     thread_lock = _THREAD_LOCKS.setdefault(thread_id, asyncio.Lock())
+    message_times = _THREAD_MESSAGE_TIMES.setdefault(thread_id, deque())
 
     try:
         while True:
@@ -267,6 +274,16 @@ async def websocket_chat(websocket: WebSocket, session_id: str):
                     "content": "Message is too large",
                 })
                 continue
+            now = time.monotonic()
+            while message_times and now - message_times[0] >= WEBSOCKET_RATE_WINDOW:
+                message_times.popleft()
+            if len(message_times) >= WEBSOCKET_RATE_LIMIT:
+                await websocket.send_json({
+                    "type": "error",
+                    "content": "Too many messages, please wait",
+                })
+                continue
+            message_times.append(now)
 
             try:
                 async with thread_lock:
@@ -297,5 +314,8 @@ async def websocket_chat(websocket: WebSocket, session_id: str):
         logger.info(f"WebSocket disconnected: session={session_id}")
     finally:
         listener_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await listener_task
         _THREAD_LOCKS.pop(thread_id, None)
+        _THREAD_MESSAGE_TIMES.pop(thread_id, None)
         emit_event("web.websocket.disconnected", user_id=user_id, thread_id=thread_id)
