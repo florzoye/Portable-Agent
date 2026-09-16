@@ -39,6 +39,7 @@ from utils.observability import emit_event
 from db.database import global_db_manager
 from src.services.model_profiles import ModelProfileService
 from src.services.models.providers import ModelProvider
+from src.agents.providers.registry import ProviderRegistry
 
 STATIC_DIR = pathlib.Path(__file__).parent / "static"
 SESSION_COOKIE = "portable_session"
@@ -162,6 +163,24 @@ async def list_model_profiles(
                 "is_active": profile.is_active,
             }
             for profile in profiles
+        ]
+    }
+
+
+@app.get("/model-providers")
+async def list_model_providers(
+    portable_session: str | None = Cookie(default=None),
+):
+    await _get_session_context(portable_session)
+    return {
+        "providers": [
+            {
+                "id": capability.provider.value,
+                "name": capability.display_name,
+                "requires_api_key": capability.requires_user_api_key,
+                "developer_managed": capability.developer_managed,
+            }
+            for capability in ProviderRegistry().capabilities()
         ]
     }
 

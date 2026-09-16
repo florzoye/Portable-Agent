@@ -13,12 +13,29 @@ A modular AI-powered assistant with Google Calendar integration, LangGraph agent
 - 💬 **Telegram Chat Bot interface** — powered by aiogram + LangGraph ReAct agent
 - 🖥️ **Web Chat UI** — browser-based chat interface with WebSocket streaming (FastAPI + uvicorn)
 - 🐳 **Dockerized deployment** — modular compose files, easy self-hosting
+- 👥 **Multi-tenant model profiles** — users can connect their own OpenAI/xAI
+  credentials through Telegram; Ollama is provided as a developer-hosted free
+  option
 
 ### Upcoming / In Planning
 - 🔍 **Hybrid RAG** (dense + sparse) for smart retrieval
 - 🎯 **Polymarket API integration** (prediction markets)
 - 📊 **Lifetime activity tracker**
 - 🐙 **GitHub commit/activity tracker**
+
+### Hosted model profiles
+
+Users authenticate through Telegram and use `/models` to manage their model
+profiles. OpenAI and xAI profiles use the user's own API key; keys are
+encrypted before they are stored and are never returned by the API or echoed
+in Telegram. The hosted Ollama profile is managed by the operator and does
+not require a user key.
+
+Provider integrations use a registry and adapter interface. To add a provider,
+implement the provider adapter and capabilities, register it in the provider
+registry, add its typed configuration and tests, then expose its metadata to
+the Telegram/Web profile services. Transport handlers should not construct
+provider clients directly.
 
 ---
 
