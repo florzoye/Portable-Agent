@@ -161,6 +161,13 @@ class ComprehensiveTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(usage["output_tokens"], 7)
         self.assertEqual(usage["total_tokens"], 18)
 
+    def test_token_cipher_rejects_invalid_key_with_actionable_message(self):
+        from utils.crypto import TokenCipher
+
+        with patch.dict("os.environ", {"TOKEN_ENCRYPTION_KEY": "token_key"}):
+            with self.assertRaisesRegex(RuntimeError, "valid Fernet key"):
+                TokenCipher()
+
     async def test_monitoring_ingest_and_stats(self):
         from src.services.monitoring import app as monitoring
 
