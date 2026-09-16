@@ -164,13 +164,17 @@ class ComprehensiveTests(unittest.IsolatedAsyncioTestCase):
     async def test_monitoring_ingest_and_stats(self):
         from src.services.monitoring import app as monitoring
 
-        with patch.dict("os.environ", {"MONITORING_API_KEY": ""}):
-            await monitoring.ingest(monitoring.MonitoringEvent(
-                event="agent.invoke.completed",
-                model="test-model",
-                total_tokens=12,
-            ))
-            result = await monitoring.stats()
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
+            with patch.dict("os.environ", {
+                "MONITORING_API_KEY": "",
+                "MONITORING_DB_PATH": os.path.join(directory, "monitoring.db"),
+            }):
+                await monitoring.ingest(monitoring.MonitoringEvent(
+                    event="agent.invoke.completed",
+                    model="test-model",
+                    total_tokens=12,
+                ))
+                result = await monitoring.stats()
 
         self.assertEqual(result["events"]["agent.invoke.completed"], 1)
         self.assertEqual(result["tokens_by_model"]["test-model"], 12)
@@ -192,6 +196,17 @@ class ComprehensiveTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(result["events"]["persistent.event"], 1)
         self.assertEqual(result["tokens_by_model"]["persistent-model"], 9)
+
+    async def test_monitoring_schema_migration_is_idempotent(self):
+        from db.sqlalchemy.monitoring_crud import MonitoringORM
+
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
+            repository = MonitoringORM(
+                f"sqlite+aiosqlite:///{os.path.join(directory, 'schema.db')}"
+            )
+            self.assertFalse(await repository.create_tables())
+            self.assertTrue(await repository.create_tables())
+            await repository.close()
 
     async def test_monitoring_rejects_invalid_api_key(self):
         from src.services.monitoring import app as monitoring

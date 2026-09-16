@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import SQLAlchemyError
 
 from db.sqlalchemy.models import Base
+from db.sqlalchemy.migrations import migrate_database
 from db.database_protocol import UsersBase, GoogleTokensBase
 
 from src.factories import repository_factory
@@ -61,8 +62,11 @@ class Database:
         if not self._initialized:
             raise RuntimeError("Database not initialized")
         engine = self.sqlalchemy_manager.get_engine()
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
+        await migrate_database(
+            engine,
+            Base.metadata,
+            extra_tables=("users", "google_tokens"),
+        )
         self.logger.info("✅ All tables created")
 
     async def drop_tables(self):
@@ -87,4 +91,3 @@ class Database:
 
 
 global_db_manager = Database()
-

@@ -8,6 +8,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from db.monitoring_protocol import MonitoringBase
 from db.sqlalchemy.models import Base
+from db.sqlalchemy.migrations import migrate_database
 
 
 class MonitoringEvent(Base):
@@ -28,9 +29,12 @@ class MonitoringORM(MonitoringBase):
         self.sessions = async_sessionmaker(self.engine, expire_on_commit=False)
         self.max_events = max_events
 
-    async def create_tables(self) -> None:
-        async with self.engine.begin() as connection:
-            await connection.run_sync(MonitoringEvent.metadata.create_all)
+    async def create_tables(self) -> bool:
+        return await migrate_database(
+            self.engine,
+            MonitoringEvent.metadata,
+            extra_tables=("monitoring_events",),
+        )
 
     async def record(self, payload: dict[str, Any]) -> None:
         async with self.sessions() as session:
