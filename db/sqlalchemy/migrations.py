@@ -1,4 +1,5 @@
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
+from dataclasses import dataclass
 
 from sqlalchemy import inspect, text
 from sqlalchemy.ext.asyncio import AsyncEngine
@@ -9,6 +10,55 @@ SCHEMA_VERSION = 2
 VERSION_TABLE = "schema_migrations"
 
 
+@dataclass(frozen=True, slots=True)
+class MigrationStatus:
+    current_version: int
+    target_version: int
+    upgrade_required: bool
+
+
+Migration = Callable[[object, MetaData], None]
+
+
+def _create_baseline(sync_connection, metadata: MetaData) -> None:
+    metadata.create_all(sync_connection)
+
+
+def _apply_version_two(sync_connection, metadata: MetaData) -> None:
+    return None
+
+
+MIGRATIONS: dict[int, Migration] = {
+    1: _create_baseline,
+    2: _apply_version_two,
+}
+
+
+async def check_database(
+    engine: AsyncEngine,
+    *,
+    version: int = SCHEMA_VERSION,
+) -> MigrationStatus:
+    async with engine.connect() as connection:
+        def read_version(sync_connection):
+            if VERSION_TABLE not in inspect(sync_connection).get_table_names():
+                return None
+            return sync_connection.execute(
+                text(
+                    f"SELECT version FROM {VERSION_TABLE} "
+                    "ORDER BY version DESC LIMIT 1"
+                )
+            ).scalar()
+
+        current = await connection.run_sync(read_version)
+    current_version = int(current or 0)
+    if current_version > version:
+        raise RuntimeError(
+            f"Database schema version {current_version} is newer than supported {version}"
+        )
+    return MigrationStatus(current_version, version, current_version < version)
+
+
 async def migrate_database(
     engine: AsyncEngine,
     metadata: MetaData,
@@ -16,40 +66,45 @@ async def migrate_database(
     version: int = SCHEMA_VERSION,
     extra_tables: Iterable[str] = (),
 ) -> bool:
-    """Bring a database to the registered schema version.
-
-    The migration is idempotent: it creates the version table and any missing
-    tables, then records the applied version. Future schema changes should add
-    a new versioned migration instead of changing this baseline silently.
-    """
+    """Bring a database to the registered schema version."""
     async with engine.begin() as connection:
         await connection.run_sync(
-            lambda sync_connection: metadata.create_all(sync_connection)
-        )
-        await connection.run_sync(
-            lambda sync_connection: _ensure_version_table(
-                sync_connection,
-                extra_tables=extra_tables,
-            )
+            _ensure_version_table
         )
         current = await connection.scalar(
             text(f"SELECT version FROM {VERSION_TABLE} ORDER BY version DESC LIMIT 1")
         )
-        if current is not None and int(current) > version:
+        current_version = int(current or 0)
+        if current_version > version:
             raise RuntimeError(
-                f"Database schema version {current} is newer than supported {version}"
+                f"Database schema version {current_version} is newer than supported {version}"
             )
-        if current != version:
+        for migration_version in range(current_version + 1, version + 1):
+            migration = MIGRATIONS.get(migration_version)
+            if migration is None:
+                raise RuntimeError(
+                    f"Migration {migration_version} is not registered"
+                )
+            await connection.run_sync(
+                lambda sync_connection, migration=migration: migration(
+                    sync_connection, metadata
+                )
+            )
             await connection.execute(
                 text(
                     f"INSERT INTO {VERSION_TABLE} (version) VALUES (:version)"
                 ),
-                {"version": version},
+                {"version": migration_version},
             )
-    return current == version
+        await connection.run_sync(
+            lambda sync_connection: _ensure_required_tables(
+                sync_connection, extra_tables
+            )
+        )
+    return current_version == version
 
 
-def _ensure_version_table(sync_connection, *, extra_tables: Iterable[str]) -> None:
+def _ensure_version_table(sync_connection) -> None:
     inspector = inspect(sync_connection)
     if VERSION_TABLE not in inspector.get_table_names():
         sync_connection.execute(
@@ -58,6 +113,8 @@ def _ensure_version_table(sync_connection, *, extra_tables: Iterable[str]) -> No
                 "(version INTEGER PRIMARY KEY, applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
             )
         )
+def _ensure_required_tables(sync_connection, extra_tables: Iterable[str]) -> None:
+    inspector = inspect(sync_connection)
     for table_name in extra_tables:
         if table_name not in inspector.get_table_names():
             raise RuntimeError(f"Required table was not created: {table_name}")

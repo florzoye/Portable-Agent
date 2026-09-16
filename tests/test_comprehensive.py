@@ -728,6 +728,36 @@ class ComprehensiveTests(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(await repository.create_tables())
             await repository.close()
 
+    async def test_schema_migration_reports_upgrade_and_rejects_newer_version(self):
+        from sqlalchemy import text
+        from db.sqlalchemy.migrations import check_database, migrate_database
+        from db.sqlalchemy.models import Base
+
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
+            engine = create_async_engine(
+                f"sqlite+aiosqlite:///{os.path.join(directory, 'schema.db')}"
+            )
+            status = await check_database(engine)
+            self.assertEqual(status.current_version, 0)
+            self.assertTrue(status.upgrade_required)
+            self.assertFalse(
+                await migrate_database(
+                    engine,
+                    Base.metadata,
+                    extra_tables=("users", "google_tokens", "model_profiles"),
+                )
+            )
+            current = await check_database(engine)
+            self.assertEqual(current.current_version, 2)
+            self.assertFalse(current.upgrade_required)
+            async with engine.begin() as connection:
+                await connection.execute(
+                    text("INSERT INTO schema_migrations (version) VALUES (99)")
+                )
+            with self.assertRaisesRegex(RuntimeError, "newer than supported"):
+                await check_database(engine)
+            await engine.dispose()
+
     async def test_monitoring_rejects_invalid_api_key(self):
         from src.services.monitoring import app as monitoring
 
