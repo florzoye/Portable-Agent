@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Annotated, Optional
-from sqlalchemy import Boolean, Integer, String, DateTime, func, ForeignKey, Text
+from sqlalchemy import Boolean, Integer, String, DateTime, func, ForeignKey, Index, Text, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 strnullable = Annotated[Optional[str], mapped_column(String, nullable=True)]
@@ -75,6 +75,15 @@ class GoogleToken(Base):
 
 class ModelProfile(Base):
     __tablename__ = "model_profiles"
+    __table_args__ = (
+        Index(
+            "uq_model_profiles_one_active_per_user",
+            "user_id",
+            unique=True,
+            postgresql_where=text("is_active = true"),
+            sqlite_where=text("is_active = 1"),
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(
