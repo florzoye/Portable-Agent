@@ -103,6 +103,18 @@ class ComprehensiveTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Шаг 1/2", _setup_prompt("openai", "model"))
         self.assertIn("Шаг 2/2", _setup_prompt("openai", "api_key"))
 
+    def test_web_model_selector_distinguishes_profiles_and_fallbacks(self):
+        from pathlib import Path
+
+        source = Path("src/services/web/static/index.html").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('label = "Мои профили"', source)
+        self.assertIn('label = "Модели оператора"', source)
+        self.assertIn('modelId.startsWith("profile:")', source)
+        self.assertIn("/model-profiles/${profileId}/activate", source)
+        self.assertIn("Введите имя модели длиной от 1 до 200 символов", source)
+
     def test_telegram_wizard_source_deletes_failed_api_key_messages(self):
         from pathlib import Path
 

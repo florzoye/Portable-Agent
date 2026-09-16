@@ -384,8 +384,15 @@ async def current_model(
     portable_session: str | None = Cookie(default=None),
 ):
     user_id, thread_id = await _get_session_context(portable_session)
+    profiles = await get_model_profiles().list(user_id)
+    active_profile = next((profile for profile in profiles if profile.is_active), None)
     llm = await get_user_model(user_id) or get_session_model(thread_id)
-    return {"session_id": thread_id, "active_model": _model_id(llm)}
+    return {
+        "session_id": thread_id,
+        "active_model": _model_id(llm),
+        "active_profile_id": active_profile.id if active_profile else None,
+        "source": "profile" if active_profile else "operator_fallback",
+    }
 
 
 @app.websocket("/ws/{session_id}")

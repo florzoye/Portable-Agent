@@ -441,23 +441,44 @@
   // ── Model selector ────────────────────────────────────────────────────────
   async function loadModels() {
     try {
-      const [modelsRes, curRes] = await Promise.all([
+      const [modelsRes, profilesRes, curRes] = await Promise.all([
         fetch("/models"),
+        fetch("/model-profiles"),
         fetch(`/session/${SESSION_ID}/model`),
       ]);
       if (curRes.status === 401) throw new Error("AUTH_REQUIRED");
       const { models }       = await modelsRes.json();
+      const { profiles }     = await profilesRes.json();
       const { active_model } = await curRes.json();
 
-      if (models.length <= 1) { modelSelect.style.display = "none"; return; }
-
       modelSelect.innerHTML = "";
+      const profileGroup = document.createElement("optgroup");
+      profileGroup.label = "Мои профили";
+      profiles.forEach(profile => {
+        const opt = document.createElement("option");
+        opt.value = `profile:${profile.id}`;
+        opt.textContent = `${profile.display_name} (${profile.provider})`;
+        profileGroup.appendChild(opt);
+      });
+      if (profiles.length) modelSelect.appendChild(profileGroup);
+
+      const fallbackGroup = document.createElement("optgroup");
+      fallbackGroup.label = "Модели оператора";
       models.forEach(m => {
         const opt = document.createElement("option");
-        opt.value = m.id; opt.textContent = m.label;
-        modelSelect.appendChild(opt);
+        opt.value = `fallback:${m.id}`; opt.textContent = m.label;
+        fallbackGroup.appendChild(opt);
       });
-      modelSelect.value    = active_model;
+      if (models.length) modelSelect.appendChild(fallbackGroup);
+      if (!profiles.length && !models.length) {
+        modelSelect.style.display = "none";
+        return;
+      }
+      modelSelect.style.display = "";
+      const activeProfile = profiles.find(profile => profile.is_active);
+      modelSelect.value = activeProfile
+        ? `profile:${activeProfile.id}`
+        : `fallback:${active_model}`;
       modelSelect.disabled = false;
     } catch (error) {
       if (error?.message === "AUTH_REQUIRED") showAuth("Сессия истекла, войдите снова");
@@ -524,14 +545,25 @@
     };
     document.getElementById("profile-save").onclick = async () => {
       profileError.textContent = "";
+      const modelName = profileModel.value.trim();
+      const provider = profileProvider.value;
+      const requiresKey = provider !== "ollama";
+      if (!modelName || modelName.length > 200) {
+        profileError.textContent = "Введите имя модели длиной от 1 до 200 символов";
+        return;
+      }
+      if (requiresKey && !profileKey.value.trim()) {
+        profileError.textContent = "Для этого провайдера нужен API-ключ";
+        return;
+      }
       try {
         const response = await fetch("/model-profiles", {
           method: "POST",
           headers: {"Content-Type": "application/json"},
           body: JSON.stringify({
-            provider: profileProvider.value,
-            model_name: profileModel.value,
-            display_name: profileModel.value,
+            provider,
+            model_name: modelName,
+            display_name: modelName,
             api_key: profileKey.value || null,
           }),
         });
@@ -547,10 +579,24 @@
   async function applyModel(modelId) {
     modelSelect.disabled = true;
     try {
+      if (modelId.startsWith("profile:")) {
+        const profileId = modelId.slice("profile:".length);
+        const res = await fetch(`/model-profiles/${profileId}/activate`, {
+          method: "POST",
+        });
+        if (res.status === 401) showAuth("Сессия истекла, войдите снова");
+        else if (!res.ok) throw new Error("Не удалось активировать профиль");
+        else {
+          await loadModels();
+          flashTag();
+        }
+        return;
+      }
+      const fallbackId = modelId.slice("fallback:".length);
       const res = await fetch(`/session/${SESSION_ID}/model`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model_id: modelId }),
+        body: JSON.stringify({ model_id: fallbackId }),
       });
       if (res.status === 401) showAuth("Сессия истекла, войдите снова");
       else if (res.ok) flashTag();
