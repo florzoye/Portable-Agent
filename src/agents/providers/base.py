@@ -27,6 +27,18 @@ class ProviderRequestError(ProviderError):
     """The provider rejected a request without exposing its raw response."""
 
 
+def provider_user_message(error: BaseException) -> str:
+    if isinstance(error, ProviderConfigurationError):
+        return "Проверьте настройки модели и API-ключ."
+    if isinstance(error, ProviderTimeoutError):
+        return "Провайдер не ответил вовремя. Попробуйте ещё раз."
+    if isinstance(error, ProviderUnavailableError):
+        return "Провайдер временно недоступен. Попробуйте позже."
+    if isinstance(error, ProviderRequestError):
+        return "Провайдер отклонил запрос. Проверьте модель и доступ к ней."
+    return "Произошла ошибка. Попробуйте ещё раз."
+
+
 @dataclass(frozen=True, slots=True)
 class ProviderContext:
     user_id: int

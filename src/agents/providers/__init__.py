@@ -5,6 +5,7 @@ from src.agents.providers.base import (
     ProviderRequestError,
     ProviderTimeoutError,
     ProviderUnavailableError,
+    provider_user_message,
 )
 from src.agents.providers.registry import ProviderRegistry
 
@@ -15,5 +16,6 @@ __all__ = [
     "ProviderRequestError",
     "ProviderTimeoutError",
     "ProviderUnavailableError",
+    "provider_user_message",
     "ProviderRegistry",
 ]

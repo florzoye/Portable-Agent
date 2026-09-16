@@ -20,6 +20,11 @@ from utils.observability import emit_event, timed_event
 from utils.token_usage import extract_token_usage
 from src.services.model_profiles import ModelProfileApplication, ModelProfileService
 from src.services.models.providers import ModelProvider, UserModelProfile
+from src.agents.providers.base import (
+    ProviderRequestError,
+    ProviderTimeoutError,
+    provider_user_message,
+)
 
 
 class FakeRedis:
@@ -130,6 +135,10 @@ class ComprehensiveTests(unittest.IsolatedAsyncioTestCase):
         payload = json.loads(log_info.call_args.args[1])
         self.assertEqual(payload["diagnostics"]["api_key"], "[REDACTED]")
         self.assertEqual(payload["diagnostics"]["status"], "invalid")
+
+    def test_provider_errors_have_safe_user_messages(self):
+        self.assertIn("вовремя", provider_user_message(ProviderTimeoutError()))
+        self.assertIn("отклонил", provider_user_message(ProviderRequestError()))
 
     def test_timed_event_emits_completion_duration(self):
         with patch("utils.observability.emit_event") as emit:

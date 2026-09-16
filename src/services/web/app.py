@@ -39,6 +39,7 @@ from utils.observability import emit_event
 from src.services.dependencies import get_model_profiles
 from src.services.models.providers import ModelProvider
 from src.agents.providers.base import ProviderConfigurationError
+from src.agents.providers.base import provider_user_message
 from src.agents.providers.registry import ProviderRegistry
 
 STATIC_DIR = pathlib.Path(__file__).parent / "static"
@@ -402,11 +403,11 @@ async def websocket_chat(websocket: WebSocket, session_id: str):
                 html = MessageRenderer.for_web(response)
                 await websocket.send_json({"type": "message", "content": html})
 
-            except Exception:
+            except Exception as error:
                 logger.exception("Agent error for session={}", thread_id)
                 await websocket.send_json({
                     "type": "error",
-                    "content": "⚠️ An error occurred, please try again",
+                    "content": f"⚠️ {provider_user_message(error)}",
                 })
 
     except WebSocketDisconnect:

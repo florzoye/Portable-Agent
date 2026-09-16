@@ -11,6 +11,7 @@ from src.agents.chat import AgentInvoker
 from src.factories.tools_factory import get_tools
 from src.factories.agents_factory import AgentsFactory
 from src.agents.llms.initializer import LLMInitializer
+from src.agents.providers.base import provider_user_message
 from src.services.dependencies import get_agent, get_user_model
 from src.services.models.providers import ModelProvider
 from src.services.dependencies import get_model_profiles
@@ -286,9 +287,9 @@ def register_handlers(dp: Dispatcher):
             )
             await send_message(chat_id, response)
 
-        except (OSError, RuntimeError, ValueError):
+        except (OSError, RuntimeError, ValueError) as error:
             logger.exception("Agent error for tg_id={}", tg_id)
-            await message.answer("⚠️ An error has occurred, try again")
+            await message.answer(f"⚠️ {provider_user_message(error)}")
 
     @dp.message(F.content_type == ContentType.PHOTO)
     async def handle_photo(message: Message):
