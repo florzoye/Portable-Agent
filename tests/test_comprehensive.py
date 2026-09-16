@@ -13,6 +13,7 @@ from src.services.web.one_time_code import (
     normalize_login_code,
 )
 from utils.observability import emit_event, timed_event
+from utils.token_usage import extract_token_usage
 
 
 class FakeRedis:
@@ -117,6 +118,46 @@ class ComprehensiveTests(unittest.IsolatedAsyncioTestCase):
         emit.assert_called_once()
         self.assertEqual(emit.call_args.args[0], "test.operation.completed")
         self.assertIn("duration_ms", emit.call_args.kwargs)
+
+    def test_token_usage_handles_none_metadata(self):
+        chunk = type(
+            "Chunk",
+            (),
+            {"usage_metadata": None, "response_metadata": None},
+        )()
+
+        self.assertEqual(
+            extract_token_usage(chunk),
+            {
+                "model": None,
+                "input_tokens": 0,
+                "output_tokens": 0,
+                "total_tokens": 0,
+            },
+        )
+
+    def test_token_usage_supports_provider_prompt_completion_names(self):
+        chunk = type(
+            "Chunk",
+            (),
+            {
+                "usage_metadata": None,
+                "response_metadata": {
+                    "model_name": "provider-model",
+                    "usage": {
+                        "prompt_tokens": 11,
+                        "completion_tokens": 7,
+                    },
+                },
+            },
+        )()
+
+        usage = extract_token_usage(chunk)
+
+        self.assertEqual(usage["model"], "provider-model")
+        self.assertEqual(usage["input_tokens"], 11)
+        self.assertEqual(usage["output_tokens"], 7)
+        self.assertEqual(usage["total_tokens"], 18)
 
     async def test_monitoring_ingest_and_stats(self):
         from src.services.monitoring import app as monitoring
