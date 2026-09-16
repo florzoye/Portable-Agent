@@ -372,8 +372,8 @@ async def select_model(
     user_id, thread_id = await _get_session_context(portable_session)
     llm = _llm_by_id(body.model_id)
     if llm is None:
-        
         raise HTTPException(status_code=404, detail=f"Model '{body.model_id}' not found")
+    await get_model_profiles().deactivate(user_id)
     set_session_model(thread_id, llm, user_id)
     return {"session_id": thread_id, "active_model": body.model_id}
 

@@ -29,6 +29,10 @@ class ModelProfilesBase(ABC):
         ...
 
     @abstractmethod
+    async def deactivate(self, user_id: int) -> bool:
+        ...
+
+    @abstractmethod
     async def delete(self, user_id: int, profile_id: int) -> bool:
         ...
 

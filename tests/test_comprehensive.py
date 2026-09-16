@@ -109,10 +109,12 @@ class ComprehensiveTests(unittest.IsolatedAsyncioTestCase):
         source = Path("src/services/web/static/index.html").read_text(
             encoding="utf-8"
         )
+        app_source = Path("src/services/web/app.py").read_text(encoding="utf-8")
         self.assertIn('label = "Мои профили"', source)
         self.assertIn('label = "Модели оператора"', source)
         self.assertIn('modelId.startsWith("profile:")', source)
         self.assertIn("/model-profiles/${profileId}/activate", source)
+        self.assertIn('await get_model_profiles().deactivate(user_id)', app_source)
         self.assertIn("Введите имя модели длиной от 1 до 200 символов", source)
 
     def test_telegram_wizard_source_deletes_failed_api_key_messages(self):

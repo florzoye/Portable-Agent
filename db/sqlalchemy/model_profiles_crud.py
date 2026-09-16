@@ -86,6 +86,18 @@ class ModelProfilesORM(ModelProfilesBase):
         await self.session.flush()
         return self._to_model(profile)
 
+    async def deactivate(self, user_id: int) -> bool:
+        result = await self.session.execute(
+            update(ModelProfile)
+            .where(
+                ModelProfile.user_id == user_id,
+                ModelProfile.is_active.is_(True),
+            )
+            .values(is_active=False)
+        )
+        await self.session.flush()
+        return result.rowcount > 0
+
     async def delete(self, user_id: int, profile_id: int) -> bool:
         result = await self.session.execute(
             delete(ModelProfile).where(

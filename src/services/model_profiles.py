@@ -224,6 +224,26 @@ class ModelProfileService:
         )
         return profile
 
+    async def deactivate(self, user_id: int) -> bool:
+        try:
+            deactivated = await self.profiles.deactivate(user_id)
+        except Exception as error:
+            _audit_profile_event(
+                "deactivate",
+                user_id,
+                result="failed",
+                error_category=_error_category(error),
+            )
+            raise
+        if deactivated:
+            UserModelFactory.invalidate_user(user_id)
+        _audit_profile_event(
+            "deactivate",
+            user_id,
+            result="succeeded",
+        )
+        return deactivated
+
     async def delete(self, user_id: int, profile_id: int) -> bool:
         try:
             deleted = await self.profiles.delete(user_id, profile_id)
@@ -318,6 +338,10 @@ class ModelProfileApplication:
     async def activate(self, user_id: int, profile_id: int) -> UserModelProfile:
         async with self.database.transaction() as session:
             return await self._service(session).activate(user_id, profile_id)
+
+    async def deactivate(self, user_id: int) -> bool:
+        async with self.database.transaction() as session:
+            return await self._service(session).deactivate(user_id)
 
     async def delete(self, user_id: int, profile_id: int) -> bool:
         async with self.database.transaction() as session:
