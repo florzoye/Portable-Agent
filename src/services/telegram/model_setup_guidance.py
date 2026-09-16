@@ -20,9 +20,17 @@ def detect_model_setup_request(text: str) -> ModelSetupRequest | None:
     normalized = " ".join(text.casefold().split())
     if not normalized:
         return None
-    if any(marker in normalized for marker in ("какие провайдеры", "список провайдеров", "доступные провайдеры")):
+    if normalized in {
+        "какие провайдеры доступны",
+        "список провайдеров",
+        "доступные провайдеры",
+    }:
         return ModelSetupRequest(ModelSetupIntent.LIST_PROVIDERS)
-    if any(marker in normalized for marker in ("настроить модель", "добавить модель", "подключить модель")):
+    if normalized in {
+        "настроить модель",
+        "добавить модель",
+        "подключить модель",
+    }:
         provider = next(
             (
                 candidate
@@ -32,7 +40,11 @@ def detect_model_setup_request(text: str) -> ModelSetupRequest | None:
             None,
         )
         return ModelSetupRequest(ModelSetupIntent.START_MODEL_SETUP, provider)
-    if any(marker in normalized for marker in ("помощь с модель", "как добавить модель", "настройка модели")):
+    if normalized in {
+        "помощь с моделью",
+        "как добавить модель",
+        "помощь по настройке модели",
+    }:
         return ModelSetupRequest(ModelSetupIntent.SHOW_SETUP_HELP)
     return None
 

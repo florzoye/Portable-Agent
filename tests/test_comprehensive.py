@@ -169,6 +169,20 @@ class ComprehensiveTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Запуск настройки требует подтверждения", source)
         self.assertIn("format_provider_help", guidance)
 
+    def test_guided_model_setup_parser_requires_exact_safe_phrases(self):
+        from src.services.telegram.model_setup_guidance import (
+            ModelSetupIntent,
+            detect_model_setup_request,
+        )
+
+        request = detect_model_setup_request("добавить модель")
+        self.assertIsNotNone(request)
+        self.assertIs(request.intent, ModelSetupIntent.START_MODEL_SETUP)
+        self.assertIsNone(detect_model_setup_request("не добавляй модель"))
+        self.assertIsNone(
+            detect_model_setup_request("обсудим, как добавить модель позже")
+        )
+
     def test_mcp_success_result_keeps_machine_data(self):
         result = tool_success("created", {"event_id": "event-1"})
 

@@ -75,7 +75,13 @@ def _setup_keyboard() -> InlineKeyboardMarkup:
 def _guided_setup_keyboard(
     provider: str | None = None,
 ) -> InlineKeyboardMarkup:
-    providers = ("openai", "xai", "ollama") if provider is None else (provider,)
+    if provider is None:
+        providers = tuple(
+            capability.provider.value
+            for capability in get_model_profiles().available_providers()
+        )
+    else:
+        providers = (provider,)
     return InlineKeyboardMarkup(
         inline_keyboard=[
             *[
