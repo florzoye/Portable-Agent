@@ -3,6 +3,8 @@ import os
 import tempfile
 import unittest
 from unittest.mock import patch
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy import insert
 
 from fastapi import HTTPException
 
@@ -195,6 +197,39 @@ class ComprehensiveTests(unittest.IsolatedAsyncioTestCase):
             api_key="must-be-ignored",
         )
         self.assertEqual(profile.provider, ModelProvider.OLLAMA)
+
+    async def test_model_profiles_repository_isolates_users_and_encrypts_keys(self):
+        from cryptography.fernet import Fernet
+        from db.sqlalchemy.models import Base, Users
+        from db.sqlalchemy.model_profiles_crud import ModelProfilesORM
+
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
+            engine = create_async_engine(
+                f"sqlite+aiosqlite:///{os.path.join(directory, 'profiles.db')}"
+            )
+            async with engine.begin() as connection:
+                await connection.run_sync(Base.metadata.create_all)
+            sessions = async_sessionmaker(engine, expire_on_commit=False)
+            with patch.dict("os.environ", {
+                "TOKEN_ENCRYPTION_KEY": Fernet.generate_key().decode(),
+            }):
+                async with sessions() as session:
+                    await session.execute(insert(Users), [{"tg_id": 101}, {"tg_id": 202}])
+                    await session.commit()
+                    repo = ModelProfilesORM(session)
+                    profile = await repo.create(
+                        101,
+                        ModelProvider.OPENAI,
+                        "gpt-4o-mini",
+                        "Private OpenAI",
+                        "secret-key",
+                    )
+                    await session.commit()
+                    self.assertEqual(len(await repo.list_for_user(101)), 1)
+                    self.assertEqual(len(await repo.list_for_user(202)), 0)
+                    self.assertEqual(await repo.get_api_key(101, profile.id), "secret-key")
+                    self.assertIsNone(await repo.get_api_key(202, profile.id))
+            await engine.dispose()
 
     def test_token_cipher_rejects_invalid_key_with_actionable_message(self):
         from utils.crypto import TokenCipher
