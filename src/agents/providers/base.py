@@ -7,8 +7,24 @@ from langchain_core.language_models import BaseChatModel
 from src.services.models.providers import ModelProvider, ProviderCapabilities
 
 
-class ProviderConfigurationError(ValueError):
+class ProviderError(RuntimeError):
+    """Base class for safe provider failures exposed to application layers."""
+
+
+class ProviderConfigurationError(ProviderError, ValueError):
     """A provider profile cannot be used with its current configuration."""
+
+
+class ProviderUnavailableError(ProviderError):
+    """The configured provider cannot currently be reached."""
+
+
+class ProviderTimeoutError(ProviderUnavailableError):
+    """The provider did not respond within the configured timeout."""
+
+
+class ProviderRequestError(ProviderError):
+    """The provider rejected a request without exposing its raw response."""
 
 
 @dataclass(frozen=True, slots=True)

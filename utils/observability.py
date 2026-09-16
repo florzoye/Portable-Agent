@@ -10,6 +10,25 @@ from typing import Any
 from loguru import logger
 
 
+_SENSITIVE_FIELD_PARTS = ("api_key", "token", "secret", "password", "authorization")
+
+
+def _is_sensitive_field(name: str) -> bool:
+    normalized = name.lower().replace("-", "_")
+    return any(part in normalized for part in _SENSITIVE_FIELD_PARTS)
+
+
+def _safe_value(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            key: "[REDACTED]" if _is_sensitive_field(str(key)) else _safe_value(item)
+            for key, item in value.items()
+        }
+    if isinstance(value, (list, tuple)):
+        return [_safe_value(item) for item in value]
+    return value
+
+
 def _monitoring_url() -> str | None:
     value = os.environ.get("MONITORING_URL", "").strip()
     return value.rstrip("/") if value else None
@@ -36,9 +55,15 @@ async def _send_to_monitoring(payload: dict[str, Any]) -> None:
 
 def emit_event(name: str, **fields: Any) -> None:
     safe_fields = {
-        key: value
+        key: "[REDACTED]" if _is_sensitive_field(key) else _safe_value(value)
         for key, value in fields.items()
-        if key not in {"token", "code", "secret", "password", "message_content"}
+        if key not in {
+            "code",
+            "message_content",
+            "password",
+            "secret",
+            "token",
+        }
     }
     payload = {
         "event": name,

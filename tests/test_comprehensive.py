@@ -116,6 +116,21 @@ class ComprehensiveTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("code", payload)
         self.assertNotIn("password", payload)
 
+    def test_observability_redacts_nested_provider_credentials(self):
+        with patch("utils.observability.logger.info") as log_info:
+            emit_event(
+                "provider.validation.failed",
+                provider="openai",
+                diagnostics={
+                    "api_key": "sk-live-secret",
+                    "status": "invalid",
+                },
+            )
+
+        payload = json.loads(log_info.call_args.args[1])
+        self.assertEqual(payload["diagnostics"]["api_key"], "[REDACTED]")
+        self.assertEqual(payload["diagnostics"]["status"], "invalid")
+
     def test_timed_event_emits_completion_duration(self):
         with patch("utils.observability.emit_event") as emit:
             with timed_event("test.operation", user_id=42):

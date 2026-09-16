@@ -286,8 +286,8 @@ def register_handlers(dp: Dispatcher):
             )
             await send_message(chat_id, response)
 
-        except (OSError, RuntimeError, ValueError) as e:
-            logger.exception(f"Agent error for tg_id={tg_id}: {e}")
+        except (OSError, RuntimeError, ValueError):
+            logger.exception("Agent error for tg_id={}", tg_id)
             await message.answer("⚠️ An error has occurred, try again")
 
     @dp.message(F.content_type == ContentType.PHOTO)

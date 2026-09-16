@@ -402,8 +402,8 @@ async def websocket_chat(websocket: WebSocket, session_id: str):
                 html = MessageRenderer.for_web(response)
                 await websocket.send_json({"type": "message", "content": html})
 
-            except Exception as e:
-                logger.exception(f"Agent error for session={thread_id}: {e}")
+            except Exception:
+                logger.exception("Agent error for session={}", thread_id)
                 await websocket.send_json({
                     "type": "error",
                     "content": "⚠️ An error occurred, please try again",
