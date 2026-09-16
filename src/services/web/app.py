@@ -74,6 +74,17 @@ def _llm_by_id(model_id: str):
             return llm
     return None
 
+
+def _websocket_origin_allowed(origin: str | None) -> bool:
+    configured = os.environ.get("CORS_ORIGINS", "")
+    allowed_origins = {
+        value.strip().rstrip("/")
+        for value in configured.split(",")
+        if value.strip()
+    }
+    return bool(origin) and origin.rstrip("/") in allowed_origins
+
+
 async def _redis_listener(session_id: str, websocket: WebSocket):
     cfg = get_config()
     pubsub = cfg.redis_client.pubsub()
@@ -399,6 +410,9 @@ async def current_model(
 @app.websocket("/ws")
 async def websocket_chat(websocket: WebSocket):
     portable_session = websocket.cookies.get(SESSION_COOKIE)
+    if not _websocket_origin_allowed(websocket.headers.get("origin")):
+        await websocket.close(code=1008, reason="Origin not allowed")
+        return
     try:
         user_id, thread_id = await _get_session_context(portable_session)
     except HTTPException:

@@ -29,8 +29,13 @@ class MonitoringEvent(BaseModel):
 
 
 def _authorized(value: str | None) -> None:
-    expected = os.environ.get("MONITORING_API_KEY")
-    if expected and value != expected:
+    expected = os.environ.get("MONITORING_API_KEY", "").strip()
+    if not expected:
+        raise HTTPException(
+            status_code=503,
+            detail="Monitoring API authentication is not configured",
+        )
+    if value != expected:
         raise HTTPException(status_code=401, detail="Invalid monitoring key")
 
 
