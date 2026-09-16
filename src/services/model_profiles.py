@@ -29,6 +29,7 @@ def _audit_profile_event(
     profile_id: int | None = None,
     provider: ModelProvider | None = None,
     error_category: str | None = None,
+    diagnostic_mode: str | None = None,
 ) -> None:
     fields = {
         "user_id": user_id,
@@ -41,6 +42,8 @@ def _audit_profile_event(
         fields["provider"] = provider.value
     if error_category is not None:
         fields["error_category"] = error_category
+    if diagnostic_mode is not None:
+        fields["diagnostic_mode"] = diagnostic_mode
     emit_event("model_profile.audit", **fields)
 
 
@@ -101,12 +104,13 @@ class ModelProfileService:
                 profile_id=profile_id,
             )
             raise ValueError("Model profile not found")
-        api_key = await self.profiles.get_api_key(user_id, profile_id)
-        adapter = self.registry.get(profile.provider)
-        context = ProviderContext(user_id, profile.model_name, api_key)
+        diagnostic_mode = "upstream" if check_upstream else "local"
         try:
+            api_key = await self.profiles.get_api_key(user_id, profile_id)
+            adapter = self.registry.get(profile.provider)
+            context = ProviderContext(user_id, profile.model_name, api_key)
             await adapter.health_check(context, check_upstream)
-        except ProviderError as error:
+        except Exception as error:
             _audit_profile_event(
                 "diagnose",
                 user_id,
@@ -114,7 +118,10 @@ class ModelProfileService:
                 profile_id=profile.id,
                 provider=profile.provider,
                 error_category=_error_category(error),
+                diagnostic_mode=diagnostic_mode,
             )
+            if not isinstance(error, ProviderError):
+                raise
             return ProviderDiagnostic(
                 profile.id,
                 profile.provider,
@@ -129,6 +136,7 @@ class ModelProfileService:
             result="healthy",
             profile_id=profile.id,
             provider=profile.provider,
+            diagnostic_mode=diagnostic_mode,
         )
         return ProviderDiagnostic(
             profile.id,

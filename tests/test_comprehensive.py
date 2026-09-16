@@ -459,8 +459,11 @@ class ComprehensiveTests(unittest.IsolatedAsyncioTestCase):
             )(),
         )
 
-        local = await service.diagnose(42, 7)
-        upstream = await service.diagnose(42, 7, check_upstream=True)
+        with patch("src.services.model_profiles.emit_event") as emit:
+            local = await service.diagnose(42, 7)
+            self.assertEqual(emit.call_args.kwargs["diagnostic_mode"], "local")
+            upstream = await service.diagnose(42, 7, check_upstream=True)
+            self.assertEqual(emit.call_args.kwargs["diagnostic_mode"], "upstream")
 
         self.assertEqual(local.status, "healthy")
         self.assertFalse(local.upstream_checked)
@@ -561,6 +564,38 @@ class ComprehensiveTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(fields["result"], "succeeded")
         self.assertNotIn("api_key", fields)
         self.assertNotIn("sk-live-secret", str(fields))
+
+    async def test_model_profile_diagnostics_audit_mode_and_internal_failure(self):
+        class Profiles:
+            async def list_for_user(self, user_id):
+                return [
+                    UserModelProfile(
+                        10, user_id, ModelProvider.OLLAMA, "llama3.2", "Ollama", True
+                    )
+                ]
+
+            async def get_api_key(self, user_id, profile_id):
+                raise RuntimeError("repository unavailable")
+
+        service = ModelProfileService(
+            Profiles(),
+            limits=type(
+                "Limits",
+                (),
+                {
+                    "MAX_MODEL_PROFILES": 10,
+                    "MAX_MODEL_NAME_LENGTH": 200,
+                    "MAX_DISPLAY_NAME_LENGTH": 200,
+                },
+            )(),
+        )
+        with patch("src.services.model_profiles.emit_event") as emit:
+            with self.assertRaisesRegex(RuntimeError, "repository unavailable"):
+                await service.diagnose(42, 10)
+
+        fields = emit.call_args.kwargs
+        self.assertEqual(fields["diagnostic_mode"], "local")
+        self.assertEqual(fields["error_category"], "internal")
 
     async def test_model_profile_application_initializes_telegram_tenant(self):
         class Users:
