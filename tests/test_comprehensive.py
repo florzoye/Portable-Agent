@@ -103,6 +103,18 @@ class ComprehensiveTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Шаг 1/2", _setup_prompt("openai", "model"))
         self.assertIn("Шаг 2/2", _setup_prompt("openai", "api_key"))
 
+    def test_telegram_wizard_source_deletes_failed_api_key_messages(self):
+        from pathlib import Path
+
+        source = Path("src/services/telegram/bot/handlers.py").read_text(
+            encoding="utf-8"
+        )
+        failure_branch = source.split(
+            'except (ProviderConfigurationError, ValueError, RuntimeError):',
+            2,
+        )[2]
+        self.assertIn("await message.delete()", failure_branch)
+
     def test_mcp_success_result_keeps_machine_data(self):
         result = tool_success("created", {"event_id": "event-1"})
 

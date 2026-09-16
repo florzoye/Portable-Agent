@@ -342,6 +342,10 @@ def register_handlers(dp: Dispatcher):
                         )
                         await get_model_profiles().activate(tg_id, profile.id)
                     except (ProviderConfigurationError, ValueError, RuntimeError):
+                        try:
+                            await message.delete()
+                        except TelegramAPIError:
+                            logger.debug("Could not delete failed model API key message")
                         await message.answer(
                             "Не удалось сохранить профиль. Проверьте API-ключ и попробуйте ещё раз.",
                             reply_markup=_setup_keyboard(),
