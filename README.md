@@ -273,6 +273,9 @@ Use `/health` for a health check and `/stats` for aggregated events, model
 usage, token counts, and recent activity. If `MONITORING_API_KEY` is set,
 enter it in the dashboard or send it as the `X-Monitoring-Key` header.
 
+Production operators should follow the [operations and recovery runbook](./OPERATIONS.md)
+for migrations, backups, secret rotation, monitoring, and rollback.
+
 ---
 
 ## 📁 Project Structure
