@@ -25,6 +25,7 @@ def _create_baseline(sync_connection, metadata: MetaData) -> None:
 
 
 def _add_active_profile_index(sync_connection, metadata: MetaData) -> None:
+    metadata.create_all(sync_connection)
     sync_connection.execute(
         text(
             "CREATE UNIQUE INDEX IF NOT EXISTS "

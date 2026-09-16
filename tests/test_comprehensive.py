@@ -1022,6 +1022,41 @@ class ComprehensiveTests(unittest.IsolatedAsyncioTestCase):
                 )
             await engine.dispose()
 
+    async def test_schema_migration_repairs_partial_v1_baseline(self):
+        from sqlalchemy import text
+        from db.sqlalchemy.migrations import check_database, migrate_database
+        from db.sqlalchemy.models import Base
+
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
+            engine = create_async_engine(
+                f"sqlite+aiosqlite:///{os.path.join(directory, 'partial.db')}"
+            )
+            async with engine.begin() as connection:
+                await connection.execute(
+                    text(
+                        "CREATE TABLE schema_migrations "
+                        "(version INTEGER PRIMARY KEY, applied_at TIMESTAMP)"
+                    )
+                )
+                await connection.execute(
+                    text("INSERT INTO schema_migrations (version) VALUES (1)")
+                )
+
+            self.assertFalse(
+                await migrate_database(
+                    engine,
+                    Base.metadata,
+                    extra_tables=("users", "google_tokens", "model_profiles"),
+                )
+            )
+            status = await check_database(
+                engine,
+                required_tables=("users", "google_tokens", "model_profiles"),
+            )
+            self.assertEqual(status.current_version, 2)
+            self.assertFalse(status.upgrade_required)
+            await engine.dispose()
+
     async def test_monitoring_rejects_invalid_api_key(self):
         from src.services.monitoring import app as monitoring
 
