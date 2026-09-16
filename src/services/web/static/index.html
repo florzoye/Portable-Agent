@@ -298,6 +298,7 @@
     <div class="model-selector">
       <select id="model-select" disabled></select>
     </div>
+    <button id="manage-models" style="padding:4px 10px;background:#141414;border:1px solid #222;border-radius:20px;color:#777;cursor:pointer">Модели</button>
     <span class="model-tag" id="model-tag">switched</span>
     <div class="status-pill">
       <div class="dot" id="status-dot"></div>
@@ -306,6 +307,18 @@
     <button id="logout-button" style="padding:4px 10px;background:#141414;border:1px solid #222;border-radius:20px;color:#777;cursor:pointer">Выйти</button>
   </div>
 </header>
+
+<section id="model-panel" style="display:none;position:fixed;top:58px;right:18px;width:320px;background:#111;border:1px solid #2a2a2a;border-radius:10px;padding:16px;z-index:5;color:#aaa">
+  <strong style="color:#ddd">Профили моделей</strong>
+  <p style="font-size:12px;color:#777">OpenAI и xAI используют ваш ключ. Ollama разработчика бесплатна.</p>
+  <div id="profile-list" style="font-size:12px;margin:10px 0"></div>
+  <select id="profile-provider" style="width:100%;margin-bottom:7px;padding:7px;background:#171717;color:#bbb;border:1px solid #333"></select>
+  <input id="profile-model" placeholder="Имя модели" style="width:100%;box-sizing:border-box;margin-bottom:7px;padding:7px;background:#171717;color:#bbb;border:1px solid #333">
+  <input id="profile-key" type="password" placeholder="API-ключ (только OpenAI/xAI)" style="width:100%;box-sizing:border-box;margin-bottom:9px;padding:7px;background:#171717;color:#bbb;border:1px solid #333">
+  <button id="profile-save" style="padding:6px 10px;background:#245b86;border:0;border-radius:5px;color:white;cursor:pointer">Добавить</button>
+  <button id="profile-close" style="padding:6px 10px;background:#222;border:0;border-radius:5px;color:#aaa;cursor:pointer">Закрыть</button>
+  <p id="profile-error" style="font-size:12px;color:#d07070"></p>
+</section>
 
 <div id="messages">
   <div id="empty-state">
@@ -360,6 +373,13 @@
   const sendBtn     = document.getElementById("send-btn");
   const statusDot   = document.getElementById("status-dot");
   const modelSelect = document.getElementById("model-select");
+  const manageModels = document.getElementById("manage-models");
+  const modelPanel = document.getElementById("model-panel");
+  const profileList = document.getElementById("profile-list");
+  const profileProvider = document.getElementById("profile-provider");
+  const profileModel = document.getElementById("profile-model");
+  const profileKey = document.getElementById("profile-key");
+  const profileError = document.getElementById("profile-error");
   const modelTag    = document.getElementById("model-tag");
   const authScreen = document.getElementById("auth-screen");
   const authError = document.getElementById("auth-error");
@@ -443,6 +463,85 @@
       if (error?.message === "AUTH_REQUIRED") showAuth("Сессия истекла, войдите снова");
       modelSelect.style.display = "none";
     }
+
+    async function loadProfilePanel() {
+      const [providersRes, profilesRes] = await Promise.all([
+        fetch("/model-providers"),
+        fetch("/model-profiles"),
+      ]);
+      if (!providersRes.ok || !profilesRes.ok) throw new Error("Не удалось загрузить профили");
+      const { providers } = await providersRes.json();
+      const { profiles } = await profilesRes.json();
+      profileProvider.innerHTML = "";
+      providers.forEach(provider => {
+        const option = document.createElement("option");
+        option.value = provider.id;
+        option.textContent = provider.name;
+        profileProvider.appendChild(option);
+      });
+      profileProvider.onchange();
+      profileList.innerHTML = "";
+      profiles.forEach(profile => {
+        const row = document.createElement("div");
+        row.style.cssText = "display:flex;justify-content:space-between;margin:6px 0";
+        const label = document.createElement("span");
+        label.textContent = `${profile.display_name}${profile.is_active ? " — активна" : ""}`;
+        const actions = document.createElement("span");
+        if (!profile.is_active) {
+          const activate = document.createElement("button");
+          activate.textContent = "Включить";
+          activate.onclick = () => updateProfile(`/model-profiles/${profile.id}/activate`, "POST");
+          actions.appendChild(activate);
+        }
+        const remove = document.createElement("button");
+        remove.textContent = "Удалить";
+        remove.onclick = () => updateProfile(`/model-profiles/${profile.id}`, "DELETE");
+        actions.appendChild(remove);
+        row.append(label, actions);
+        profileList.appendChild(row);
+      });
+    }
+
+    async function updateProfile(url, method) {
+      try {
+        const response = await fetch(url, {method});
+        if (!response.ok) throw new Error("Операция не выполнена");
+        await loadProfilePanel();
+        await loadModels();
+      } catch (error) {
+        profileError.textContent = error.message;
+      }
+    }
+
+    manageModels.onclick = async () => {
+      modelPanel.style.display = "block";
+      profileError.textContent = "";
+      try { await loadProfilePanel(); } catch (error) { profileError.textContent = error.message; }
+    };
+    document.getElementById("profile-close").onclick = () => { modelPanel.style.display = "none"; };
+    profileProvider.onchange = () => {
+      profileKey.style.display = profileProvider.value === "ollama" ? "none" : "block";
+    };
+    document.getElementById("profile-save").onclick = async () => {
+      profileError.textContent = "";
+      try {
+        const response = await fetch("/model-profiles", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({
+            provider: profileProvider.value,
+            model_name: profileModel.value,
+            display_name: profileModel.value,
+            api_key: profileKey.value || null,
+          }),
+        });
+        if (!response.ok) throw new Error((await response.json()).detail || "Профиль не создан");
+        profileModel.value = "";
+        profileKey.value = "";
+        await loadProfilePanel();
+        await loadModels();
+      } catch (error) { profileError.textContent = error.message; }
+    };
   }
 
   async function applyModel(modelId) {
