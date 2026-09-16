@@ -13,6 +13,9 @@ from src.services.calendar.mcp.common import event_list_result, event_result
 from src.services.tool_result import tool_failure, tool_success
 from src.services.web.app import (
     _acquire_provider_diagnostic_slot,
+    activate_model_profile,
+    delete_model_profile,
+    list_model_profiles,
     _get_session_context,
 )
 from src.services.telegram.bot.handlers import _setup_keyboard, _setup_prompt
@@ -58,6 +61,57 @@ class FakeRedis:
 
 
 class ComprehensiveTests(unittest.IsolatedAsyncioTestCase):
+    async def test_web_profile_transport_preserves_tenant_ownership(self):
+        class ProfileApplication:
+            def __init__(self):
+                self.calls = []
+
+            async def list(self, user_id):
+                self.calls.append(("list", user_id))
+                return [
+                    UserModelProfile(
+                        id=11,
+                        user_id=user_id,
+                        provider=ModelProvider.OLLAMA,
+                        model_name="llama",
+                        display_name="Tenant model",
+                        is_active=True,
+                    )
+                ]
+
+            async def activate(self, user_id, profile_id):
+                self.calls.append(("activate", user_id, profile_id))
+                raise ValueError("Model profile not found")
+
+            async def delete(self, user_id, profile_id):
+                self.calls.append(("delete", user_id, profile_id))
+                return False
+
+        application = ProfileApplication()
+        with patch(
+            "src.services.web.app._get_session_context",
+            return_value=(101, "thread-101"),
+        ), patch(
+            "src.services.web.app.get_model_profiles",
+            return_value=application,
+        ):
+            listed = await list_model_profiles("session-101")
+            with self.assertRaises(HTTPException) as error:
+                await activate_model_profile(999, "session-101")
+            deleted = await delete_model_profile(999, "session-101")
+
+        self.assertEqual(listed["profiles"][0]["id"], 11)
+        self.assertEqual(error.exception.status_code, 404)
+        self.assertEqual(deleted, {"deleted": False})
+        self.assertEqual(
+            application.calls,
+            [
+                ("list", 101),
+                ("activate", 101, 999),
+                ("delete", 101, 999),
+            ],
+        )
+
     async def test_authenticated_session_returns_server_owned_thread(self):
         redis = FakeRedis({
             "web_session:session": "42",

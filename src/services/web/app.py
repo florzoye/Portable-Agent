@@ -256,7 +256,10 @@ async def activate_model_profile(
     portable_session: str | None = Cookie(default=None),
 ):
     user_id, thread_id = await _get_session_context(portable_session)
-    profile = await get_model_profiles().activate(user_id, profile_id)
+    try:
+        profile = await get_model_profiles().activate(user_id, profile_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     clear_session_model(thread_id)
     return {"id": profile.id, "active": True}
 
