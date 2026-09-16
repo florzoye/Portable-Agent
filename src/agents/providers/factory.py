@@ -1,3 +1,5 @@
+from collections import OrderedDict
+
 from langchain_core.language_models import BaseChatModel
 
 from db.model_profiles_protocol import ModelProfilesBase
@@ -7,6 +9,9 @@ from src.services.models.providers import ModelProvider
 
 
 class UserModelFactory:
+    _cache: OrderedDict[tuple[int, int], BaseChatModel] = OrderedDict()
+    _cache_limit = 64
+
     def __init__(
         self,
         profiles: ModelProfilesBase,
@@ -30,11 +35,27 @@ class UserModelFactory:
         )
         if profile is None:
             raise ValueError("Model profile not found")
+        cache_key = (user_id, profile_id)
+        cached = self._cache.get(cache_key)
+        if cached is not None:
+            self._cache.move_to_end(cache_key)
+            return cached
         api_key = await self.profiles.get_api_key(user_id, profile_id)
         adapter = self.registry.get(profile.provider)
         context = ProviderContext(user_id, profile.model_name, api_key)
         await adapter.validate(context)
-        return await adapter.create_model(context)
+        model = await adapter.create_model(context)
+        self._cache[cache_key] = model
+        self._cache.move_to_end(cache_key)
+        while len(self._cache) > self._cache_limit:
+            self._cache.popitem(last=False)
+        return model
+
+    @classmethod
+    def invalidate_user(cls, user_id: int) -> None:
+        for cache_key in tuple(cls._cache):
+            if cache_key[0] == user_id:
+                cls._cache.pop(cache_key, None)
 
     async def create_active(self, user_id: int) -> BaseChatModel | None:
         profile = await self.profiles.get_active(user_id)
@@ -51,3 +72,4 @@ class UserModelFactory:
         context = ProviderContext(user_id, model_name, None)
         await adapter.validate(context)
         return await adapter.create_model(context)
+from collections import OrderedDict

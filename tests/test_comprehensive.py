@@ -25,6 +25,7 @@ from src.agents.providers.base import (
     ProviderTimeoutError,
     provider_user_message,
 )
+from src.agents.providers.factory import UserModelFactory
 
 
 class FakeRedis:
@@ -139,6 +140,20 @@ class ComprehensiveTests(unittest.IsolatedAsyncioTestCase):
     def test_provider_errors_have_safe_user_messages(self):
         self.assertIn("вовремя", provider_user_message(ProviderTimeoutError()))
         self.assertIn("отклонил", provider_user_message(ProviderRequestError()))
+
+    def test_user_model_factory_cache_is_bounded_and_invalidatable(self):
+        UserModelFactory._cache.clear()
+        UserModelFactory._cache_limit = 1
+        sentinel = object()
+        UserModelFactory._cache[(1, 1)] = sentinel
+        UserModelFactory._cache[(2, 2)] = sentinel
+        while len(UserModelFactory._cache) > UserModelFactory._cache_limit:
+            UserModelFactory._cache.popitem(last=False)
+        self.assertEqual(len(UserModelFactory._cache), 1)
+        UserModelFactory.invalidate_user(2)
+        self.assertNotIn((2, 2), UserModelFactory._cache)
+        UserModelFactory._cache.clear()
+        UserModelFactory._cache_limit = 64
 
     def test_timed_event_emits_completion_duration(self):
         with patch("utils.observability.emit_event") as emit:

@@ -5,6 +5,7 @@ from db.database import Database
 from db.database_protocol import UsersBase
 from data import get_config
 from src.exceptions.config_exp import ConfigNotInitializedError
+from src.agents.providers.factory import UserModelFactory
 from src.agents.providers.base import ProviderConfigurationError
 from src.agents.providers.registry import ProviderRegistry
 from src.services.models.providers import (
@@ -77,10 +78,15 @@ class ModelProfileService:
         )
 
     async def activate(self, user_id: int, profile_id: int) -> UserModelProfile:
-        return await self.profiles.activate(user_id, profile_id)
+        profile = await self.profiles.activate(user_id, profile_id)
+        UserModelFactory.invalidate_user(user_id)
+        return profile
 
     async def delete(self, user_id: int, profile_id: int) -> bool:
-        return await self.profiles.delete(user_id, profile_id)
+        deleted = await self.profiles.delete(user_id, profile_id)
+        if deleted:
+            UserModelFactory.invalidate_user(user_id)
+        return deleted
 
 
 class ModelProfileApplication:
