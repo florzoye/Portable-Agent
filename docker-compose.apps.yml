@@ -3,6 +3,10 @@ services:
     build: .
     command: uv run python -m src.services.monitoring.run
     env_file: .env
+    environment:
+      MONITORING_DB_PATH: /app/data/monitoring.db
+    volumes:
+      - sqlite-data:/app/data
     ports:
       - "8010:8010"
     networks:

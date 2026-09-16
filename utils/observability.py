@@ -1,6 +1,7 @@
 import json
 import asyncio
 import os
+import secrets
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -39,8 +40,13 @@ def emit_event(name: str, **fields: Any) -> None:
         for key, value in fields.items()
         if key not in {"token", "code", "secret", "password", "message_content"}
     }
+    payload = {
+        "event": name,
+        "event_id": secrets.token_hex(8),
+        **safe_fields,
+    }
     logger.info("event={}", json.dumps(
-        {"event": name, **safe_fields},
+        payload,
         default=str,
         sort_keys=True,
     ))
@@ -48,7 +54,7 @@ def emit_event(name: str, **fields: Any) -> None:
         loop = asyncio.get_running_loop()
     except RuntimeError:
         return
-    loop.create_task(_send_to_monitoring({"event": name, **safe_fields}))
+    loop.create_task(_send_to_monitoring(payload))
 
 
 @contextmanager

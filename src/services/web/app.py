@@ -38,6 +38,9 @@ SESSION_COOKIE = "portable_session"
 SESSION_TTL = 86400
 SESSION_KEY_PREFIX = "web_session:"
 SESSION_THREAD_PREFIX = "web_session_thread:"
+MAX_WEBSOCKET_MESSAGE_SIZE = 4000
+AGENT_INVOKE_TIMEOUT = 120
+_THREAD_LOCKS: dict[str, asyncio.Lock] = {}
 
 
 def _model_id(llm) -> str:
@@ -250,6 +253,7 @@ async def websocket_chat(websocket: WebSocket, session_id: str):
     logger.info(f"WebSocket connected: session={thread_id}")
 
     listener_task = asyncio.create_task(_redis_listener(thread_id, websocket))
+    thread_lock = _THREAD_LOCKS.setdefault(thread_id, asyncio.Lock())
 
     try:
         while True:
@@ -257,18 +261,27 @@ async def websocket_chat(websocket: WebSocket, session_id: str):
             text = data.strip()
             if not text:
                 continue
+            if len(text) > MAX_WEBSOCKET_MESSAGE_SIZE:
+                await websocket.send_json({
+                    "type": "error",
+                    "content": "Message is too large",
+                })
+                continue
 
             try:
-                agent = await get_agent(thread_id, user_id)
-                llm = get_session_model(thread_id)
-
-                invoker = AgentInvoker(agent, thread_id)
-                response = await invoker.invoke(
-                    user_message=text,
-                    runnable_config=cfg.RUNNABLE_CONFIG,
-                    llm=llm,
-                    sender=WebSocketSender(websocket),
-                )
+                async with thread_lock:
+                    agent = await get_agent(thread_id, user_id)
+                    llm = get_session_model(thread_id)
+                    invoker = AgentInvoker(agent, thread_id)
+                    response = await asyncio.wait_for(
+                        invoker.invoke(
+                            user_message=text,
+                            runnable_config=cfg.RUNNABLE_CONFIG,
+                            llm=llm,
+                            sender=WebSocketSender(websocket),
+                        ),
+                        timeout=AGENT_INVOKE_TIMEOUT,
+                    )
 
                 html = MessageRenderer.for_web(response)
                 await websocket.send_json({"type": "message", "content": html})
@@ -284,4 +297,5 @@ async def websocket_chat(websocket: WebSocket, session_id: str):
         logger.info(f"WebSocket disconnected: session={session_id}")
     finally:
         listener_task.cancel()
+        _THREAD_LOCKS.pop(thread_id, None)
         emit_event("web.websocket.disconnected", user_id=user_id, thread_id=thread_id)

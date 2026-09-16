@@ -56,7 +56,7 @@ A modular AI-powered assistant with Google Calendar integration, LangGraph agent
 
 | Service | Host port (dev) | Container port | Description |
 |---|---|---|---|
-| `fastapi-calendar` | 8001 | 8001 | Google Calendar REST API |
+| `fastapi-calendar` | — | 8001 | Internal Google Calendar REST API (not published to the host) |
 | `mcp-calendar` | 8002 | 8002 | MCP server wrapping Calendar API via SSE |
 | `mcp-reminders` | 8003 | 8003 | MCP server for scheduling reminders and follow-ups |
 | `telegram-bot` | — | — | aiogram bot with LangGraph agent |
@@ -114,6 +114,12 @@ docker compose \
 - **Telegram**: open your bot and send any message
 - **Web UI**: `http://localhost:8080`
 - **Flower** (Celery monitor): `http://localhost:5555`
+- **Monitoring dashboard**: `http://localhost:8010/dashboard`
+
+The Calendar REST API is intentionally reachable only from the internal Docker
+network. Calendar MCP calls authenticate with `INTERNAL_API_KEY`; use the
+OAuth callback URL configured in Google for the browser redirect, not a
+directly exposed Calendar API port.
 
 If Telegram API is unavailable from your network, configure an HTTP(S) or SOCKS5
 proxy in `.env`:

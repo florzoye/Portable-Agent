@@ -1,4 +1,6 @@
 import json
+import os
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -175,6 +177,24 @@ class ComprehensiveTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(result["events"]["agent.invoke.completed"], 1)
         self.assertEqual(result["tokens_by_model"]["test-model"], 12)
+
+    async def test_monitoring_persistence_round_trip(self):
+        from src.services.monitoring import app as monitoring
+
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
+            with patch.dict("os.environ", {
+                "MONITORING_API_KEY": "",
+                "MONITORING_DB_PATH": os.path.join(directory, "monitoring.db"),
+            }):
+                await monitoring.ingest(monitoring.MonitoringEvent(
+                    event="persistent.event",
+                    model="persistent-model",
+                    total_tokens=9,
+                ))
+                result = await monitoring.stats()
+
+        self.assertEqual(result["events"]["persistent.event"], 1)
+        self.assertEqual(result["tokens_by_model"]["persistent-model"], 9)
 
     async def test_monitoring_rejects_invalid_api_key(self):
         from src.services.monitoring import app as monitoring

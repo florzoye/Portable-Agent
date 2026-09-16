@@ -7,6 +7,11 @@ from src.services.calendar.creds_manager import CredentialsManager
 
 from utils.helpers import DataCreator
 from utils.const import SCOPES, GOOGLE_CALENDAR_REDIRECT_URI
+from data import get_config
+
+
+OAUTH_STATE_TTL = 600
+OAUTH_STATE_PREFIX = "calendar_oauth_state:"
 
 class GoogleAuthService:
     def __init__(
@@ -39,7 +44,11 @@ class GoogleAuthService:
 
         flow = self._get_flow()
         auth_url, state = flow.authorization_url(access_type="offline", prompt="consent")
-        await self.users_repo.update_user(tg_id, google_id=state)
+        await get_config().redis_client.setex(
+            f"{OAUTH_STATE_PREFIX}{state}",
+            OAUTH_STATE_TTL,
+            str(tg_id),
+        )
 
         self.logger.info(f"Generated auth URL for tg_id={tg_id}")
         return auth_url

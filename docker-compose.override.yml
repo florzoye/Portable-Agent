@@ -1,8 +1,4 @@
 services:
-  fastapi-calendar:
-    ports:
-      - "8001:8001"
-
   mcp-calendar:
     ports:
       - "8002:8002"

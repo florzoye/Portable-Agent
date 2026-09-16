@@ -11,6 +11,8 @@ from src.models import (
 )
 from src.services.calendar.server.dependencies import get_calendar_service, get_tokens_repo, get_users_repo
 from db.database_protocol import UsersBase, GoogleTokensBase
+from data import get_config
+from src.services.calendar.auth_service import OAUTH_STATE_PREFIX
 
 router = APIRouter(prefix="/calendar", tags=["calendar"])
 
@@ -45,11 +47,11 @@ async def oauth_callback(
         if not code or not state:
             raise HTTPException(status_code=400, detail="Invalid OAuth callback: missing code or state")
 
-        user = await users_repo.get_user_by_google_id(state)
-        if not user:
+        tg_id = await get_config().redis_client.getdel(f"{OAUTH_STATE_PREFIX}{state}")
+        if tg_id is None:
             raise HTTPException(status_code=400, detail="Invalid state: user not found")
 
-        await calendar.exchange_code(user.tg_id, code)
+        await calendar.exchange_code(int(tg_id), code)
         return RedirectResponse(url="/calendar/success")
     except HTTPException:
         raise
