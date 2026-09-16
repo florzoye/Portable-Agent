@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from sqlalchemy.schema import MetaData
 
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 VERSION_TABLE = "schema_migrations"
 
 
@@ -24,7 +24,21 @@ def _create_baseline(sync_connection, metadata: MetaData) -> None:
     metadata.create_all(sync_connection)
 
 
-MIGRATIONS: dict[int, Migration] = {1: _create_baseline}
+def _add_active_profile_index(sync_connection, metadata: MetaData) -> None:
+    sync_connection.execute(
+        text(
+            "CREATE UNIQUE INDEX IF NOT EXISTS "
+            "uq_model_profiles_one_active_per_user "
+            "ON model_profiles (user_id) "
+            "WHERE is_active = true"
+        )
+    )
+
+
+MIGRATIONS: dict[int, Migration] = {
+    1: _create_baseline,
+    2: _add_active_profile_index,
+}
 
 
 async def check_database(

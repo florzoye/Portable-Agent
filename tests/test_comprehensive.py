@@ -916,7 +916,7 @@ class ComprehensiveTests(unittest.IsolatedAsyncioTestCase):
                 engine,
                 required_tables=("users", "google_tokens", "model_profiles"),
             )
-            self.assertEqual(current.current_version, 1)
+            self.assertEqual(current.current_version, 2)
             self.assertFalse(current.upgrade_required)
             async with engine.begin() as connection:
                 await connection.execute(

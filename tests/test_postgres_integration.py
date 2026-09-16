@@ -4,7 +4,7 @@ import unittest
 from unittest import mock
 
 from cryptography.fernet import Fernet
-from sqlalchemy import func, insert, select, text
+from sqlalchemy import func, insert, inspect, select, text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from db.sqlalchemy.migrations import check_database, migrate_database
@@ -42,7 +42,7 @@ class PostgreSQLIntegrationTests(unittest.IsolatedAsyncioTestCase):
             self.engine,
             required_tables=("users", "google_tokens", "model_profiles"),
         )
-        self.assertEqual(status.current_version, 1)
+        self.assertEqual(status.current_version, 2)
         self.assertFalse(status.upgrade_required)
         self.assertTrue(
             await migrate_database(
@@ -51,6 +51,35 @@ class PostgreSQLIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 extra_tables=("users", "google_tokens", "model_profiles"),
             )
         )
+
+    async def test_existing_version_one_database_receives_active_index_upgrade(self):
+        async with self.engine.begin() as connection:
+            await connection.execute(
+                text("DROP INDEX uq_model_profiles_one_active_per_user")
+            )
+            await connection.execute(
+                text("DELETE FROM schema_migrations WHERE version = 2")
+            )
+        status = await check_database(self.engine)
+        self.assertEqual(status.current_version, 1)
+        self.assertTrue(status.upgrade_required)
+        self.assertFalse(
+            await migrate_database(
+                self.engine,
+                Base.metadata,
+                extra_tables=("users", "google_tokens", "model_profiles"),
+            )
+        )
+        async with self.engine.connect() as connection:
+            indexes = await connection.run_sync(
+                lambda sync_connection: {
+                    index["name"]
+                    for index in inspect(sync_connection).get_indexes(
+                        "model_profiles"
+                    )
+                }
+            )
+        self.assertIn("uq_model_profiles_one_active_per_user", indexes)
 
     async def test_foreign_key_and_encrypted_key_round_trip(self):
         with mock.patch.dict(
