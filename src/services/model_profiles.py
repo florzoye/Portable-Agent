@@ -136,14 +136,23 @@ class ModelProfileService:
 class ModelProfileApplication:
     """Transaction-owning application facade shared by transport adapters."""
 
-    def __init__(self, database: Database):
+    def __init__(
+        self,
+        database: Database,
+        registry: ProviderRegistry | None = None,
+    ):
         self.database = database
+        self.registry = registry or ProviderRegistry()
 
     def _service(self, session) -> ModelProfileService:
         return ModelProfileService(
             self.database.get_model_profiles_repo(session),
+            registry=self.registry,
             limits=get_config().TENANT_LIMITS,
         )
+
+    def available_providers(self) -> tuple[ProviderCapabilities, ...]:
+        return self.registry.capabilities()
 
     async def _ensure_user(self, session, tg_id: int) -> None:
         users: UsersBase = self.database.get_users_repo(session)

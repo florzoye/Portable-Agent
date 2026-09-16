@@ -626,6 +626,21 @@ class ComprehensiveTests(unittest.IsolatedAsyncioTestCase):
             application = ModelProfileApplication(Database())
             self.assertIsNone(await application.create_active_model(42))
 
+    def test_model_profile_application_exposes_injected_provider_capabilities(self):
+        class Registry:
+            def capabilities(self):
+                return (
+                    ProviderCapabilities(
+                        ModelProvider.OLLAMA,
+                        "Test Ollama",
+                        False,
+                        developer_managed=True,
+                    ),
+                )
+
+        application = ModelProfileApplication(object(), registry=Registry())
+        self.assertEqual(application.available_providers()[0].display_name, "Test Ollama")
+
     async def test_model_profiles_repository_isolates_users_and_encrypts_keys(self):
         from cryptography.fernet import Fernet
         from db.sqlalchemy.models import Base, Users
