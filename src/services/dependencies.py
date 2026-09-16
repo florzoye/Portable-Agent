@@ -6,6 +6,8 @@ from src.factories.agents_factory import AgentsFactory
 from src.agents.prompts.system import AgentSystemPrompt
 from src.factories.checkpointer_factory import get_checkpointer
 from src.factories.tools_factory import get_tools
+from db.database import global_db_manager
+from src.agents.providers.factory import UserModelFactory
 
 _session_models: dict[str, BaseChatModel] = {}
 
@@ -27,6 +29,12 @@ def get_session_model(session_id: str) -> BaseChatModel:
     return _session_models.get(session_id) or LLMInitializer.get_selected()
 
 
+async def get_user_model(user_id: int) -> BaseChatModel | None:
+    async with global_db_manager.transaction() as session:
+        profiles = global_db_manager.get_model_profiles_repo(session)
+        return await UserModelFactory(profiles).create_active(user_id)
+
+
 async def get_agent(session_id: str, user_id: int | None = None) -> CompiledStateGraph:
     """
     Creates an agent for a specific web session.
@@ -36,9 +44,10 @@ async def get_agent(session_id: str, user_id: int | None = None) -> CompiledStat
     checkpointer = await get_checkpointer()
     tools = await get_tools()
 
+    user_model = await get_user_model(user_id) if user_id is not None else None
     return await AgentsFactory(
         name="web-assistant",
-        model=get_session_model(session_id),
+        model=user_model or get_session_model(session_id),
         tools=tools,
         system_prompt=AgentSystemPrompt(),
         checkpointer=checkpointer,

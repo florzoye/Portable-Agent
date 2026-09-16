@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Annotated, Optional
-from sqlalchemy import Integer, String, DateTime, func, ForeignKey, Text
+from sqlalchemy import Boolean, Integer, String, DateTime, func, ForeignKey, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 strnullable = Annotated[Optional[str], mapped_column(String, nullable=True)]
@@ -71,3 +71,30 @@ class GoogleToken(Base):
     )
 
     user: Mapped["Users"] = relationship(back_populates="google_tokens", lazy="noload")
+
+
+class ModelProfile(Base):
+    __tablename__ = "model_profiles"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    provider: Mapped[str] = mapped_column(String(32), nullable=False)
+    model_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    display_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    encrypted_api_key: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )

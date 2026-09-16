@@ -24,6 +24,7 @@ from src.services.dependencies import (
     clear_session_model,
     get_agent,
     get_session_model,
+    get_user_model,
     set_session_model,
 )
 from utils.renderers import MessageRenderer
@@ -35,6 +36,9 @@ from src.services.web.one_time_code import (
     normalize_login_code,
 )
 from utils.observability import emit_event
+from db.database import global_db_manager
+from src.services.model_profiles import ModelProfileService
+from src.services.models.providers import ModelProvider
 
 STATIC_DIR = pathlib.Path(__file__).parent / "static"
 SESSION_COOKIE = "portable_session"
@@ -131,8 +135,97 @@ async def list_models():
     return {"models": _build_model_list()}
 
 
+class CreateModelProfileRequest(BaseModel):
+    provider: ModelProvider
+    model_name: str
+    display_name: str = ""
+    api_key: str | None = None
+
+
+@app.get("/model-profiles")
+async def list_model_profiles(
+    portable_session: str | None = Cookie(default=None),
+):
+    user_id, _ = await _get_session_context(portable_session)
+    async with global_db_manager.transaction() as session:
+        service = ModelProfileService(
+            global_db_manager.get_model_profiles_repo(session)
+        )
+        profiles = await service.list(user_id)
+    return {
+        "profiles": [
+            {
+                "id": profile.id,
+                "provider": profile.provider.value,
+                "model_name": profile.model_name,
+                "display_name": profile.display_name,
+                "is_active": profile.is_active,
+            }
+            for profile in profiles
+        ]
+    }
+
+
+@app.post("/model-profiles")
+async def create_model_profile(
+    body: CreateModelProfileRequest,
+    portable_session: str | None = Cookie(default=None),
+):
+    user_id, _ = await _get_session_context(portable_session)
+    async with global_db_manager.transaction() as session:
+        service = ModelProfileService(
+            global_db_manager.get_model_profiles_repo(session)
+        )
+        profile = await service.add(
+            user_id,
+            body.provider,
+            body.model_name,
+            body.display_name,
+            body.api_key,
+        )
+    return {
+        "id": profile.id,
+        "provider": profile.provider.value,
+        "model_name": profile.model_name,
+        "display_name": profile.display_name,
+        "is_active": profile.is_active,
+    }
+
+
+@app.post("/model-profiles/{profile_id}/activate")
+async def activate_model_profile(
+    profile_id: int,
+    portable_session: str | None = Cookie(default=None),
+):
+    user_id, thread_id = await _get_session_context(portable_session)
+    async with global_db_manager.transaction() as session:
+        service = ModelProfileService(
+            global_db_manager.get_model_profiles_repo(session)
+        )
+        profile = await service.activate(user_id, profile_id)
+    clear_session_model(thread_id)
+    return {"id": profile.id, "active": True}
+
+
+@app.delete("/model-profiles/{profile_id}")
+async def delete_model_profile(
+    profile_id: int,
+    portable_session: str | None = Cookie(default=None),
+):
+    user_id, thread_id = await _get_session_context(portable_session)
+    async with global_db_manager.transaction() as session:
+        service = ModelProfileService(
+            global_db_manager.get_model_profiles_repo(session)
+        )
+        deleted = await service.delete(user_id, profile_id)
+    if deleted:
+        clear_session_model(thread_id)
+    return {"deleted": deleted}
+
+
 class SelectModelRequest(BaseModel):
     model_id: str
+
 
 class CodeLoginRequest(BaseModel):
     code: str
@@ -240,8 +333,8 @@ async def current_model(
     session_id: str,
     portable_session: str | None = Cookie(default=None),
 ):
-    _, thread_id = await _get_session_context(portable_session)
-    llm = get_session_model(thread_id)
+    user_id, thread_id = await _get_session_context(portable_session)
+    llm = await get_user_model(user_id) or get_session_model(thread_id)
     return {"session_id": thread_id, "active_model": _model_id(llm)}
 
 
@@ -288,7 +381,7 @@ async def websocket_chat(websocket: WebSocket, session_id: str):
             try:
                 async with thread_lock:
                     agent = await get_agent(thread_id, user_id)
-                    llm = get_session_model(thread_id)
+                    llm = await get_user_model(user_id) or get_session_model(thread_id)
                     invoker = AgentInvoker(agent, thread_id)
                     response = await asyncio.wait_for(
                         invoker.invoke(

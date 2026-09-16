@@ -1,14 +1,20 @@
+import json
+
 from loguru import logger
 from aiogram.filters import Command
 from aiogram import Bot, Dispatcher, F
 from aiogram.enums import ContentType, ParseMode
+from aiogram.exceptions import TelegramAPIError
 from aiogram.types import CallbackQuery, Message, InlineKeyboardButton, InlineKeyboardMarkup
 
 from src.agents.chat import AgentInvoker
 from src.factories.tools_factory import get_tools
 from src.factories.agents_factory import AgentsFactory
 from src.agents.llms.initializer import LLMInitializer
-from src.services.dependencies import get_agent
+from src.services.dependencies import get_agent, get_user_model
+from src.services.model_profiles import ModelProfileService
+from src.services.models.providers import ModelProvider
+from db.database import global_db_manager
 from src.factories.checkpointer_factory import get_checkpointer, close_checkpointer
 from src.agents.tools.reminders import close_reminders_client
 from src.agents.tools.calendar import close_calendar_client
@@ -30,6 +36,59 @@ def init_telegram_sender(bot: Bot) -> None:
 
 def _model_id(llm) -> str:
     return getattr(llm, "model", None) or getattr(llm, "model_name", None) or type(llm).__name__
+
+
+def _model_setup_key(tg_id: int) -> str:
+    return f"model_setup:{tg_id}"
+
+
+async def _model_profiles(tg_id: int):
+    async with global_db_manager.transaction() as session:
+        service = ModelProfileService(
+            global_db_manager.get_model_profiles_repo(session)
+        )
+        return await service.list(tg_id)
+
+
+async def _model_keyboard(tg_id: int) -> InlineKeyboardMarkup:
+    profiles = await _model_profiles(tg_id)
+    rows = [
+        [
+            InlineKeyboardButton(
+                text=f"{profile.display_name}{' ✅' if profile.is_active else ''}",
+                callback_data=f"model:activate:{profile.id}",
+            ),
+            InlineKeyboardButton(
+                text="Удалить",
+                callback_data=f"model:delete:{profile.id}",
+            ),
+        ]
+        for profile in profiles
+    ]
+    rows.extend(
+        [
+            [InlineKeyboardButton(text="➕ OpenAI", callback_data="model:add:openai")],
+            [InlineKeyboardButton(text="➕ xAI", callback_data="model:add:xai")],
+            [InlineKeyboardButton(text="🆓 Ollama разработчика", callback_data="model:add:ollama")],
+        ]
+    )
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+async def _send_models(message: Message) -> None:
+    profiles = await _model_profiles(message.from_user.id)
+    text = (
+        "🤖 <b>Мои модели</b>\n\n"
+        "Выберите активную модель или добавьте новую.\n"
+        "OpenAI и xAI используют ваш API-ключ. Ollama разработчика доступна бесплатно."
+    )
+    if profiles:
+        text += "\n\n" + "\n".join(
+            f"• {profile.display_name}"
+            f"{' — активна' if profile.is_active else ''}"
+            for profile in profiles
+        )
+    await message.answer(text, reply_markup=await _model_keyboard(message.from_user.id))
 
 async def on_startup():
     try:
@@ -88,6 +147,64 @@ def register_handlers(dp: Dispatcher):
             f"{code}\nКод действителен 5 минут и одноразовый."
         )
 
+    @dp.message(Command("models"))
+    async def handle_models(message: Message):
+        await _send_models(message)
+
+    @dp.callback_query(F.data.startswith("model:add:"))
+    async def handle_model_add(callback: CallbackQuery):
+        provider = callback.data.rsplit(":", 1)[1]
+        await get_config().redis_client.setex(
+            _model_setup_key(callback.from_user.id),
+            600,
+            json.dumps({"provider": provider, "step": "model"}),
+        )
+        labels = {
+            "openai": "OpenAI",
+            "xai": "xAI",
+            "ollama": "Ollama разработчика",
+        }
+        await callback.message.answer(
+            f"Добавляем {labels.get(provider, provider)}.\n"
+            "Напишите точное имя модели (например: gpt-4o-mini, grok-3-mini или llama3.2).\n"
+            "Для отмены напишите /cancel."
+        )
+        await callback.answer()
+
+    @dp.callback_query(F.data.startswith("model:activate:"))
+    async def handle_model_activate(callback: CallbackQuery):
+        profile_id = int(callback.data.rsplit(":", 1)[1])
+        async with global_db_manager.transaction() as session:
+            service = ModelProfileService(
+                global_db_manager.get_model_profiles_repo(session)
+            )
+            profile = await service.activate(callback.from_user.id, profile_id)
+        AgentsFactory.reset(tg_id=callback.from_user.id)
+        await callback.message.edit_reply_markup(
+            reply_markup=await _model_keyboard(callback.from_user.id)
+        )
+        await callback.answer(f"Активна: {profile.display_name}")
+
+    @dp.callback_query(F.data.startswith("model:delete:"))
+    async def handle_model_delete(callback: CallbackQuery):
+        profile_id = int(callback.data.rsplit(":", 1)[1])
+        async with global_db_manager.transaction() as session:
+            service = ModelProfileService(
+                global_db_manager.get_model_profiles_repo(session)
+            )
+            deleted = await service.delete(callback.from_user.id, profile_id)
+        if deleted:
+            AgentsFactory.reset(tg_id=callback.from_user.id)
+        await callback.message.edit_reply_markup(
+            reply_markup=await _model_keyboard(callback.from_user.id)
+        )
+        await callback.answer("Модель удалена" if deleted else "Модель не найдена")
+
+    @dp.message(Command("cancel"))
+    async def handle_model_cancel(message: Message):
+        await get_config().redis_client.delete(_model_setup_key(message.from_user.id))
+        await message.answer("Настройка модели отменена.")
+
     @dp.message(Command("switch_model"))
     async def handle_switch_model(message: Message):
         llms = LLMInitializer.get_llms()
@@ -134,9 +251,61 @@ def register_handlers(dp: Dispatcher):
         cfg = get_config()
 
         try:
+            setup_raw = await cfg.redis_client.get(_model_setup_key(tg_id))
+            if setup_raw:
+                setup = json.loads(setup_raw)
+                if setup["step"] == "model":
+                    setup["model_name"] = text
+                    if setup["provider"] == "ollama":
+                        async with global_db_manager.transaction() as session:
+                            service = ModelProfileService(
+                                global_db_manager.get_model_profiles_repo(session)
+                            )
+                            profile = await service.add(
+                                tg_id,
+                                ModelProvider.OLLAMA,
+                                text,
+                                text,
+                            )
+                            await service.activate(tg_id, profile.id)
+                        await cfg.redis_client.delete(_model_setup_key(tg_id))
+                        await message.answer(f"✅ Ollama-модель {text} добавлена и активирована.")
+                    else:
+                        setup["step"] = "api_key"
+                        await cfg.redis_client.setex(
+                            _model_setup_key(tg_id), 600, json.dumps(setup)
+                        )
+                        await message.answer(
+                            "Теперь отправьте API-ключ одним сообщением.\n"
+                            "Он не будет показан обратно и сохранится в зашифрованном виде."
+                        )
+                    return
+                if setup["step"] == "api_key":
+                    provider = ModelProvider(setup["provider"])
+                    async with global_db_manager.transaction() as session:
+                        service = ModelProfileService(
+                            global_db_manager.get_model_profiles_repo(session)
+                        )
+                        profile = await service.add(
+                            tg_id,
+                            provider,
+                            setup["model_name"],
+                            setup["model_name"],
+                            text,
+                        )
+                        await service.activate(tg_id, profile.id)
+                    await cfg.redis_client.delete(_model_setup_key(tg_id))
+                    try:
+                        await message.delete()
+                    except TelegramAPIError:
+                        logger.debug("Could not delete model API key message")
+                    await message.answer(
+                        f"✅ {provider.value} модель {setup['model_name']} добавлена и активирована."
+                    )
+                    return
             agent = await get_agent(tg_id)
             invoker = AgentInvoker(agent, tg_id)
-            llm = LLMInitializer.get_selected()
+            llm = await get_user_model(tg_id) or LLMInitializer.get_selected()
 
             response = await invoker.invoke(
                 user_message=text,

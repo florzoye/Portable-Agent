@@ -16,6 +16,8 @@ from src.services.web.one_time_code import (
 )
 from utils.observability import emit_event, timed_event
 from utils.token_usage import extract_token_usage
+from src.services.model_profiles import ModelProfileService
+from src.services.models.providers import ModelProvider, UserModelProfile
 
 
 class FakeRedis:
@@ -160,6 +162,39 @@ class ComprehensiveTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(usage["input_tokens"], 11)
         self.assertEqual(usage["output_tokens"], 7)
         self.assertEqual(usage["total_tokens"], 18)
+
+    async def test_model_profile_service_requires_keys_only_for_user_managed_providers(self):
+        class Profiles:
+            async def create(self, user_id, provider, model_name, display_name, encrypted_api_key):
+                return UserModelProfile(1, user_id, provider, model_name, display_name, False)
+
+            async def list_for_user(self, user_id):
+                return []
+
+            async def get_active(self, user_id):
+                return None
+
+            async def activate(self, user_id, profile_id):
+                raise AssertionError
+
+            async def delete(self, user_id, profile_id):
+                raise AssertionError
+
+            async def get_api_key(self, user_id, profile_id):
+                return None
+
+        service = ModelProfileService(Profiles())
+        with self.assertRaises(ValueError):
+            await service.add(1, ModelProvider.OPENAI, "gpt-4o-mini", "OpenAI")
+
+        profile = await service.add(
+            1,
+            ModelProvider.OLLAMA,
+            "llama3.2",
+            "Free Ollama",
+            api_key="must-be-ignored",
+        )
+        self.assertEqual(profile.provider, ModelProvider.OLLAMA)
 
     def test_token_cipher_rejects_invalid_key_with_actionable_message(self):
         from utils.crypto import TokenCipher

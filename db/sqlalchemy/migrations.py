@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from sqlalchemy.schema import MetaData
 
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 VERSION_TABLE = "schema_migrations"
 
 

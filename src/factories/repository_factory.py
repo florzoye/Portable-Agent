@@ -36,5 +36,11 @@ class RepositoryFactory:
                 f"Expected AsyncDatabaseManager or AsyncSession"
             )
 
+    def create_model_profiles_repo(self, session: AsyncSession):
+        if isinstance(session, AsyncSession):
+            from db.sqlalchemy.model_profiles_crud import ModelProfilesORM
+            return ModelProfilesORM(session)
+        raise TypeError(f"Unsupported session type: {type(session)}")
+
 
 repository_factory = RepositoryFactory()

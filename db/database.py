@@ -58,6 +58,11 @@ class Database:
             session = self.get_session()
         return repository_factory.create_tokens_repo(session)
 
+    def get_model_profiles_repo(self, session: Optional[AsyncSession] = None):
+        if session is None:
+            session = self.get_session()
+        return repository_factory.create_model_profiles_repo(session)
+
     async def create_tables(self):
         if not self._initialized:
             raise RuntimeError("Database not initialized")
@@ -65,7 +70,7 @@ class Database:
         await migrate_database(
             engine,
             Base.metadata,
-            extra_tables=("users", "google_tokens"),
+            extra_tables=("users", "google_tokens", "model_profiles"),
         )
         self.logger.info("✅ All tables created")
 
