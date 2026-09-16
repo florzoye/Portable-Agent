@@ -747,8 +747,11 @@ class ComprehensiveTests(unittest.IsolatedAsyncioTestCase):
                     extra_tables=("users", "google_tokens", "model_profiles"),
                 )
             )
-            current = await check_database(engine)
-            self.assertEqual(current.current_version, 2)
+            current = await check_database(
+                engine,
+                required_tables=("users", "google_tokens", "model_profiles"),
+            )
+            self.assertEqual(current.current_version, 1)
             self.assertFalse(current.upgrade_required)
             async with engine.begin() as connection:
                 await connection.execute(
@@ -756,6 +759,14 @@ class ComprehensiveTests(unittest.IsolatedAsyncioTestCase):
                 )
             with self.assertRaisesRegex(RuntimeError, "newer than supported"):
                 await check_database(engine)
+            async with engine.begin() as connection:
+                await connection.execute(text("DELETE FROM schema_migrations WHERE version = 99"))
+                await connection.execute(text("DROP TABLE model_profiles"))
+            with self.assertRaisesRegex(RuntimeError, "missing required tables"):
+                await check_database(
+                    engine,
+                    required_tables=("users", "google_tokens", "model_profiles"),
+                )
             await engine.dispose()
 
     async def test_monitoring_rejects_invalid_api_key(self):

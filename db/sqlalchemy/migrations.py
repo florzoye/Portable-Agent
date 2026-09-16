@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from sqlalchemy.schema import MetaData
 
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 1
 VERSION_TABLE = "schema_migrations"
 
 
@@ -24,20 +24,14 @@ def _create_baseline(sync_connection, metadata: MetaData) -> None:
     metadata.create_all(sync_connection)
 
 
-def _apply_version_two(sync_connection, metadata: MetaData) -> None:
-    return None
-
-
-MIGRATIONS: dict[int, Migration] = {
-    1: _create_baseline,
-    2: _apply_version_two,
-}
+MIGRATIONS: dict[int, Migration] = {1: _create_baseline}
 
 
 async def check_database(
     engine: AsyncEngine,
     *,
     version: int = SCHEMA_VERSION,
+    required_tables: Iterable[str] = (),
 ) -> MigrationStatus:
     async with engine.connect() as connection:
         def read_version(sync_connection):
@@ -51,10 +45,21 @@ async def check_database(
             ).scalar()
 
         current = await connection.run_sync(read_version)
+        missing_tables = await connection.run_sync(
+            lambda sync_connection: [
+                table_name
+                for table_name in required_tables
+                if table_name not in inspect(sync_connection).get_table_names()
+            ]
+        )
     current_version = int(current or 0)
     if current_version > version:
         raise RuntimeError(
             f"Database schema version {current_version} is newer than supported {version}"
+        )
+    if missing_tables:
+        raise RuntimeError(
+            "Database is missing required tables: " + ", ".join(missing_tables)
         )
     return MigrationStatus(current_version, version, current_version < version)
 

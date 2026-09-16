@@ -12,7 +12,10 @@ async def main(command: str) -> int:
     sqlalchemy_manager.init()
     engine = sqlalchemy_manager.get_engine()
     if command == "check":
-        status = await check_database(engine)
+        status = await check_database(
+            engine,
+            required_tables=("users", "google_tokens", "model_profiles"),
+        )
         print(
             f"current={status.current_version} target={status.target_version} "
             f"upgrade_required={status.upgrade_required}"
