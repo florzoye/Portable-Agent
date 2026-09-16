@@ -164,9 +164,6 @@ class ComprehensiveTests(unittest.IsolatedAsyncioTestCase):
     async def test_monitoring_ingest_and_stats(self):
         from src.services.monitoring import app as monitoring
 
-        monitoring.EVENTS.clear()
-        monitoring.COUNTERS.clear()
-        monitoring.TOKENS.clear()
         with patch.dict("os.environ", {"MONITORING_API_KEY": ""}):
             await monitoring.ingest(monitoring.MonitoringEvent(
                 event="agent.invoke.completed",
