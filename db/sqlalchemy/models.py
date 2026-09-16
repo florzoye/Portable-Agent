@@ -78,7 +78,7 @@ class ModelProfile(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"),
+        ForeignKey("users.tg_id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )

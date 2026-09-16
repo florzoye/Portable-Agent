@@ -8,8 +8,14 @@ from src.factories.checkpointer_factory import get_checkpointer
 from src.factories.tools_factory import get_tools
 from db.database import global_db_manager
 from src.agents.providers.factory import UserModelFactory
+from src.services.model_profiles import ModelProfileApplication
 
 _session_models: dict[str, BaseChatModel] = {}
+_model_profiles = ModelProfileApplication(global_db_manager)
+
+
+def get_model_profiles() -> ModelProfileApplication:
+    return _model_profiles
 
 
 def set_session_model(

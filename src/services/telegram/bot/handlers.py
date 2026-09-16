@@ -12,9 +12,8 @@ from src.factories.tools_factory import get_tools
 from src.factories.agents_factory import AgentsFactory
 from src.agents.llms.initializer import LLMInitializer
 from src.services.dependencies import get_agent, get_user_model
-from src.services.model_profiles import ModelProfileService
 from src.services.models.providers import ModelProvider
-from db.database import global_db_manager
+from src.services.dependencies import get_model_profiles
 from src.factories.checkpointer_factory import get_checkpointer, close_checkpointer
 from src.agents.tools.reminders import close_reminders_client
 from src.agents.tools.calendar import close_calendar_client
@@ -43,11 +42,7 @@ def _model_setup_key(tg_id: int) -> str:
 
 
 async def _model_profiles(tg_id: int):
-    async with global_db_manager.transaction() as session:
-        service = ModelProfileService(
-            global_db_manager.get_model_profiles_repo(session)
-        )
-        return await service.list(tg_id)
+    return await get_model_profiles().list(tg_id)
 
 
 async def _model_keyboard(tg_id: int) -> InlineKeyboardMarkup:
@@ -174,11 +169,7 @@ def register_handlers(dp: Dispatcher):
     @dp.callback_query(F.data.startswith("model:activate:"))
     async def handle_model_activate(callback: CallbackQuery):
         profile_id = int(callback.data.rsplit(":", 1)[1])
-        async with global_db_manager.transaction() as session:
-            service = ModelProfileService(
-                global_db_manager.get_model_profiles_repo(session)
-            )
-            profile = await service.activate(callback.from_user.id, profile_id)
+        profile = await get_model_profiles().activate(callback.from_user.id, profile_id)
         AgentsFactory.reset(tg_id=callback.from_user.id)
         await callback.message.edit_reply_markup(
             reply_markup=await _model_keyboard(callback.from_user.id)
@@ -188,11 +179,7 @@ def register_handlers(dp: Dispatcher):
     @dp.callback_query(F.data.startswith("model:delete:"))
     async def handle_model_delete(callback: CallbackQuery):
         profile_id = int(callback.data.rsplit(":", 1)[1])
-        async with global_db_manager.transaction() as session:
-            service = ModelProfileService(
-                global_db_manager.get_model_profiles_repo(session)
-            )
-            deleted = await service.delete(callback.from_user.id, profile_id)
+        deleted = await get_model_profiles().delete(callback.from_user.id, profile_id)
         if deleted:
             AgentsFactory.reset(tg_id=callback.from_user.id)
         await callback.message.edit_reply_markup(
@@ -257,17 +244,10 @@ def register_handlers(dp: Dispatcher):
                 if setup["step"] == "model":
                     setup["model_name"] = text
                     if setup["provider"] == "ollama":
-                        async with global_db_manager.transaction() as session:
-                            service = ModelProfileService(
-                                global_db_manager.get_model_profiles_repo(session)
-                            )
-                            profile = await service.add(
-                                tg_id,
-                                ModelProvider.OLLAMA,
-                                text,
-                                text,
-                            )
-                            await service.activate(tg_id, profile.id)
+                        profile = await get_model_profiles().add(
+                            tg_id, ModelProvider.OLLAMA, text, text
+                        )
+                        await get_model_profiles().activate(tg_id, profile.id)
                         await cfg.redis_client.delete(_model_setup_key(tg_id))
                         await message.answer(f"✅ Ollama-модель {text} добавлена и активирована.")
                     else:
@@ -282,18 +262,10 @@ def register_handlers(dp: Dispatcher):
                     return
                 if setup["step"] == "api_key":
                     provider = ModelProvider(setup["provider"])
-                    async with global_db_manager.transaction() as session:
-                        service = ModelProfileService(
-                            global_db_manager.get_model_profiles_repo(session)
-                        )
-                        profile = await service.add(
-                            tg_id,
-                            provider,
-                            setup["model_name"],
-                            setup["model_name"],
-                            text,
-                        )
-                        await service.activate(tg_id, profile.id)
+                    profile = await get_model_profiles().add(
+                        tg_id, provider, setup["model_name"], setup["model_name"], text
+                    )
+                    await get_model_profiles().activate(tg_id, profile.id)
                     await cfg.redis_client.delete(_model_setup_key(tg_id))
                     try:
                         await message.delete()

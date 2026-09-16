@@ -21,6 +21,7 @@ def create_app(
     routers: list,
     port: int = 8000,
     internal_auth: bool = False,
+    database_bootstrap=None,
 ) -> FastAPI:
 
     @asynccontextmanager
@@ -29,7 +30,8 @@ def create_app(
         init()
         
         await global_db_manager.setup()
-        await global_db_manager.create_tables()
+        if database_bootstrap is not None:
+            await database_bootstrap()
         yield
         await global_db_manager.close()
 

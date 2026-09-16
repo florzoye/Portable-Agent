@@ -36,9 +36,9 @@ from src.services.web.one_time_code import (
     normalize_login_code,
 )
 from utils.observability import emit_event
-from db.database import global_db_manager
-from src.services.model_profiles import ModelProfileService
+from src.services.dependencies import get_model_profiles
 from src.services.models.providers import ModelProvider
+from src.agents.providers.base import ProviderConfigurationError
 from src.agents.providers.registry import ProviderRegistry
 
 STATIC_DIR = pathlib.Path(__file__).parent / "static"
@@ -148,11 +148,7 @@ async def list_model_profiles(
     portable_session: str | None = Cookie(default=None),
 ):
     user_id, _ = await _get_session_context(portable_session)
-    async with global_db_manager.transaction() as session:
-        service = ModelProfileService(
-            global_db_manager.get_model_profiles_repo(session)
-        )
-        profiles = await service.list(user_id)
+    profiles = await get_model_profiles().list(user_id)
     return {
         "profiles": [
             {
@@ -191,17 +187,16 @@ async def create_model_profile(
     portable_session: str | None = Cookie(default=None),
 ):
     user_id, _ = await _get_session_context(portable_session)
-    async with global_db_manager.transaction() as session:
-        service = ModelProfileService(
-            global_db_manager.get_model_profiles_repo(session)
-        )
-        profile = await service.add(
+    try:
+        profile = await get_model_profiles().add(
             user_id,
             body.provider,
             body.model_name,
             body.display_name,
             body.api_key,
         )
+    except (ProviderConfigurationError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {
         "id": profile.id,
         "provider": profile.provider.value,
@@ -217,11 +212,7 @@ async def activate_model_profile(
     portable_session: str | None = Cookie(default=None),
 ):
     user_id, thread_id = await _get_session_context(portable_session)
-    async with global_db_manager.transaction() as session:
-        service = ModelProfileService(
-            global_db_manager.get_model_profiles_repo(session)
-        )
-        profile = await service.activate(user_id, profile_id)
+    profile = await get_model_profiles().activate(user_id, profile_id)
     clear_session_model(thread_id)
     return {"id": profile.id, "active": True}
 
@@ -232,11 +223,7 @@ async def delete_model_profile(
     portable_session: str | None = Cookie(default=None),
 ):
     user_id, thread_id = await _get_session_context(portable_session)
-    async with global_db_manager.transaction() as session:
-        service = ModelProfileService(
-            global_db_manager.get_model_profiles_repo(session)
-        )
-        deleted = await service.delete(user_id, profile_id)
+    deleted = await get_model_profiles().delete(user_id, profile_id)
     if deleted:
         clear_session_model(thread_id)
     return {"deleted": deleted}
