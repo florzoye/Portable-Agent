@@ -11,7 +11,10 @@ from fastapi import HTTPException
 from src.agents.memory import normalize_memory_user_id, user_memory_path
 from src.services.calendar.mcp.common import event_list_result, event_result
 from src.services.tool_result import tool_failure, tool_success
-from src.services.web.app import _get_session_context
+from src.services.web.app import (
+    _acquire_provider_diagnostic_slot,
+    _get_session_context,
+)
 from src.services.web.one_time_code import (
     generate_login_code,
     normalize_login_code,
@@ -45,6 +48,13 @@ class FakeRedis:
     async def expire(self, key, ttl):
         self.expired.append((key, ttl))
 
+    async def set(self, key, value, ex=None, nx=False):
+        if nx and key in self.values:
+            return False
+        self.values[key] = value
+        self.expired.append((key, ex))
+        return True
+
 
 class ComprehensiveTests(unittest.IsolatedAsyncioTestCase):
     async def test_authenticated_session_returns_server_owned_thread(self):
@@ -69,6 +79,15 @@ class ComprehensiveTests(unittest.IsolatedAsyncioTestCase):
                 await _get_session_context("missing")
 
         self.assertEqual(error.exception.status_code, 401)
+
+    async def test_provider_upstream_diagnostic_has_a_cooldown_slot(self):
+        redis = FakeRedis()
+        config = type("Config", (), {"redis_client": redis})()
+
+        with patch("src.services.web.app.get_config", return_value=config):
+            self.assertTrue(await _acquire_provider_diagnostic_slot(42, 7))
+            self.assertFalse(await _acquire_provider_diagnostic_slot(42, 7))
+            self.assertTrue(await _acquire_provider_diagnostic_slot(42, 8))
 
     def test_login_code_is_numeric_and_exactly_eight_digits(self):
         code = generate_login_code()
@@ -408,13 +427,15 @@ class ComprehensiveTests(unittest.IsolatedAsyncioTestCase):
                 self.checked = []
 
             async def validate(self, context):
-                self.checked.append(False)
+                self.checked.append("validate")
 
             async def create_model(self, context):
-                return object()
+                class Model:
+                    async def ainvoke(inner_self, prompt):
+                        self.checked.append(prompt)
+                        return "OK"
 
-            async def health_check(self, context, check_upstream=False):
-                self.checked.append(check_upstream)
+                return Model()
 
         adapter = Adapter()
         registry = type(
@@ -445,7 +466,59 @@ class ComprehensiveTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(local.upstream_checked)
         self.assertEqual(upstream.message, "Провайдер отвечает")
         self.assertTrue(upstream.upstream_checked)
-        self.assertEqual(adapter.checked, [False, True])
+        self.assertEqual(adapter.checked, ["validate", "validate", "Reply with OK."])
+
+    async def test_model_profile_diagnostics_map_upstream_failure_safely(self):
+        class Profiles:
+            async def list_for_user(self, user_id):
+                return [
+                    UserModelProfile(
+                        8, user_id, ModelProvider.OLLAMA, "llama3.2", "Ollama", True
+                    )
+                ]
+
+            async def get_api_key(self, user_id, profile_id):
+                return None
+
+        class Adapter(ProviderAdapter):
+            capabilities = ProviderCapabilities(
+                ModelProvider.OLLAMA, "Ollama", False, developer_managed=True
+            )
+
+            async def validate(self, context):
+                return None
+
+            async def create_model(self, context):
+                class Model:
+                    async def ainvoke(self, prompt):
+                        raise ProviderTimeoutError("internal timeout")
+
+                return Model()
+
+        registry = type(
+            "Registry",
+            (),
+            {"get": lambda self, provider: Adapter()},
+        )()
+        service = ModelProfileService(
+            Profiles(),
+            registry=registry,
+            limits=type(
+                "Limits",
+                (),
+                {
+                    "MAX_MODEL_PROFILES": 10,
+                    "MAX_MODEL_NAME_LENGTH": 200,
+                    "MAX_DISPLAY_NAME_LENGTH": 200,
+                },
+            )(),
+        )
+
+        result = await service.diagnose(42, 8, check_upstream=True)
+
+        self.assertEqual(result.status, "unhealthy")
+        self.assertIn("вовремя", result.message)
+        self.assertNotIn("internal timeout", result.message)
 
     async def test_model_profile_application_initializes_telegram_tenant(self):
         class Users:

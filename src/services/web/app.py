@@ -51,6 +51,7 @@ MAX_WEBSOCKET_MESSAGE_SIZE = 4000
 AGENT_INVOKE_TIMEOUT = 120
 WEBSOCKET_RATE_WINDOW = 60
 WEBSOCKET_RATE_LIMIT = 30
+PROVIDER_DIAGNOSTIC_COOLDOWN = 30
 _THREAD_LOCKS: dict[str, asyncio.Lock] = {}
 _THREAD_MESSAGE_TIMES: dict[str, deque[float]] = {}
 
@@ -88,6 +89,18 @@ async def _redis_listener(session_id: str, websocket: WebSocket):
     finally:
         await pubsub.unsubscribe(f"ws_push:{session_id}")
         await pubsub.aclose()
+
+
+async def _acquire_provider_diagnostic_slot(user_id: int, profile_id: int) -> bool:
+    key = f"provider_diagnostic:{user_id}:{profile_id}"
+    return bool(
+        await get_config().redis_client.set(
+            key,
+            "1",
+            ex=PROVIDER_DIAGNOSTIC_COOLDOWN,
+            nx=True,
+        )
+    )
 
 class WebSocketSender(StreamSender):
     """Delivers streamed tokens to the client over a WebSocket connection."""
@@ -189,6 +202,14 @@ async def diagnose_model_profile(
     portable_session: str | None = Cookie(default=None),
 ):
     user_id, _ = await _get_session_context(portable_session)
+    if check_upstream and not await _acquire_provider_diagnostic_slot(
+        user_id, profile_id
+    ):
+        raise HTTPException(
+            status_code=429,
+            detail="Подождите перед следующей проверкой провайдера.",
+            headers={"Retry-After": str(PROVIDER_DIAGNOSTIC_COOLDOWN)},
+        )
     try:
         result = await get_model_profiles().diagnose(
             user_id, profile_id, check_upstream
