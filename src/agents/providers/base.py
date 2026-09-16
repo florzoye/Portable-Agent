@@ -39,6 +39,17 @@ def provider_user_message(error: BaseException) -> str:
     return "Произошла ошибка. Попробуйте ещё раз."
 
 
+def normalize_provider_error(error: Exception) -> ProviderError:
+    error_name = type(error).__name__.lower()
+    if isinstance(error, TimeoutError) or "timeout" in error_name:
+        return ProviderTimeoutError("Provider request timed out")
+    if isinstance(error, (OSError, ConnectionError)) or any(
+        marker in error_name for marker in ("connection", "network", "unavailable")
+    ):
+        return ProviderUnavailableError("Provider is unavailable")
+    return ProviderRequestError("Provider rejected the request")
+
+
 @dataclass(frozen=True, slots=True)
 class ProviderContext:
     user_id: int

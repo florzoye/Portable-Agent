@@ -1,4 +1,5 @@
 from collections import OrderedDict
+from hashlib import sha256
 
 from langchain_core.language_models import BaseChatModel
 
@@ -9,7 +10,7 @@ from src.services.models.providers import ModelProvider
 
 
 class UserModelFactory:
-    _cache: OrderedDict[tuple[int, int], BaseChatModel] = OrderedDict()
+    _cache: OrderedDict[tuple[int, int, str], BaseChatModel] = OrderedDict()
     _cache_limit = 64
 
     def __init__(
@@ -35,12 +36,15 @@ class UserModelFactory:
         )
         if profile is None:
             raise ValueError("Model profile not found")
-        cache_key = (user_id, profile_id)
+        api_key = await self.profiles.get_api_key(user_id, profile_id)
+        profile_fingerprint = sha256(
+            f"{profile.model_name}\0{api_key or ''}".encode()
+        ).hexdigest()
+        cache_key = (user_id, profile_id, profile_fingerprint)
         cached = self._cache.get(cache_key)
         if cached is not None:
             self._cache.move_to_end(cache_key)
             return cached
-        api_key = await self.profiles.get_api_key(user_id, profile_id)
         adapter = self.registry.get(profile.provider)
         context = ProviderContext(user_id, profile.model_name, api_key)
         await adapter.validate(context)

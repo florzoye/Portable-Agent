@@ -26,6 +26,8 @@ from src.agents.providers.base import (
     provider_user_message,
 )
 from src.agents.providers.factory import UserModelFactory
+from src.agents.providers.base import ProviderAdapter, ProviderContext
+from src.agents.providers.adapters import OpenAIProvider
 
 
 class FakeRedis:
@@ -141,19 +143,104 @@ class ComprehensiveTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("вовремя", provider_user_message(ProviderTimeoutError()))
         self.assertIn("отклонил", provider_user_message(ProviderRequestError()))
 
+    async def test_openai_adapter_normalizes_constructor_timeout(self):
+        config = type(
+            "Config",
+            (),
+            {
+                "BASE_LLM_CONFIG": type(
+                    "Base",
+                    (),
+                    {
+                        "MAX_TOKENS": 10,
+                        "TEMPERATURE": 0,
+                        "TIMEOUT": 1,
+                        "VERBOSE": False,
+                        "TOP_P": 1,
+                    },
+                )()
+            },
+        )()
+        with patch("src.agents.providers.adapters.get_config", return_value=config):
+            with patch(
+                "src.agents.providers.adapters.ChatOpenAI",
+                side_effect=TimeoutError(),
+            ):
+                with self.assertRaises(ProviderTimeoutError):
+                    await OpenAIProvider().create_model(
+                        ProviderContext(1, "gpt-4o-mini", "key")
+                    )
+
     def test_user_model_factory_cache_is_bounded_and_invalidatable(self):
         UserModelFactory._cache.clear()
         UserModelFactory._cache_limit = 1
         sentinel = object()
-        UserModelFactory._cache[(1, 1)] = sentinel
-        UserModelFactory._cache[(2, 2)] = sentinel
+        UserModelFactory._cache[(1, 1, "one")] = sentinel
+        UserModelFactory._cache[(2, 2, "two")] = sentinel
         while len(UserModelFactory._cache) > UserModelFactory._cache_limit:
             UserModelFactory._cache.popitem(last=False)
         self.assertEqual(len(UserModelFactory._cache), 1)
         UserModelFactory.invalidate_user(2)
-        self.assertNotIn((2, 2), UserModelFactory._cache)
+        self.assertNotIn((2, 2, "two"), UserModelFactory._cache)
         UserModelFactory._cache.clear()
         UserModelFactory._cache_limit = 64
+
+    async def test_user_model_factory_reuses_and_refreshes_profile_runtime(self):
+        class Adapter(ProviderAdapter):
+            capabilities = type(
+                "Capabilities",
+                (),
+                {
+                    "provider": ModelProvider.OLLAMA,
+                    "display_name": "Ollama",
+                    "requires_user_api_key": False,
+                    "developer_managed": True,
+                },
+            )()
+
+            def __init__(self):
+                self.created = 0
+
+            async def validate(self, context):
+                return None
+
+            async def create_model(self, context):
+                self.created += 1
+                return object()
+
+        class Registry:
+            def __init__(self, adapter):
+                self.adapter = adapter
+
+            def get(self, provider):
+                return self.adapter
+
+        class Profiles:
+            def __init__(self):
+                self.api_key = "first"
+                self.profile = UserModelProfile(
+                    1, 42, ModelProvider.OLLAMA, "llama", "Llama", True
+                )
+
+            async def list_for_user(self, user_id):
+                return [self.profile]
+
+            async def get_api_key(self, user_id, profile_id):
+                return self.api_key
+
+        UserModelFactory._cache.clear()
+        profiles = Profiles()
+        adapter = Adapter()
+        factory = UserModelFactory(profiles, Registry(adapter))
+        first = await factory.create_for_profile(42, 1)
+        second = await factory.create_for_profile(42, 1)
+        profiles.api_key = "rotated"
+        third = await factory.create_for_profile(42, 1)
+
+        self.assertIs(first, second)
+        self.assertIsNot(second, third)
+        self.assertEqual(adapter.created, 2)
+        UserModelFactory._cache.clear()
 
     def test_timed_event_emits_completion_duration(self):
         with patch("utils.observability.emit_event") as emit:
@@ -227,7 +314,18 @@ class ComprehensiveTests(unittest.IsolatedAsyncioTestCase):
             async def get_api_key(self, user_id, profile_id):
                 return None
 
-        service = ModelProfileService(Profiles())
+        service = ModelProfileService(
+            Profiles(),
+            limits=type(
+                "Limits",
+                (),
+                {
+                    "MAX_MODEL_PROFILES": 10,
+                    "MAX_MODEL_NAME_LENGTH": 200,
+                    "MAX_DISPLAY_NAME_LENGTH": 200,
+                },
+            )(),
+        )
         with self.assertRaises(ValueError):
             await service.add(1, ModelProvider.OPENAI, "gpt-4o-mini", "OpenAI")
         with self.assertRaises(ValueError):
@@ -261,13 +359,29 @@ class ComprehensiveTests(unittest.IsolatedAsyncioTestCase):
             MAX_MODEL_NAME_LENGTH = 4
             MAX_DISPLAY_NAME_LENGTH = 4
 
-        with patch("src.services.model_profiles.get_config") as config:
-            config.return_value.TENANT_LIMITS = Limits()
-            service = ModelProfileService(Profiles())
-            with self.assertRaisesRegex(ValueError, "too long"):
-                await service.add(
-                    1, ModelProvider.OLLAMA, "llama3.2", "Ollama"
-                )
+        service = ModelProfileService(Profiles(), limits=Limits())
+        with self.assertRaisesRegex(ValueError, "too long"):
+            await service.add(1, ModelProvider.OLLAMA, "llama3.2", "Ollama")
+        with self.assertRaisesRegex(ValueError, "too long"):
+            await service.add(1, ModelProvider.OLLAMA, "ok", "Ollama")
+
+        class FullProfiles(Profiles):
+            async def list_for_user(self, user_id):
+                return [object()] * 10
+
+        with self.assertRaisesRegex(ValueError, "limit"):
+            await ModelProfileService(
+                FullProfiles(),
+                limits=type(
+                    "ProfileLimit",
+                    (),
+                    {
+                        "MAX_MODEL_PROFILES": 10,
+                        "MAX_MODEL_NAME_LENGTH": 200,
+                        "MAX_DISPLAY_NAME_LENGTH": 200,
+                    },
+                )(),
+            ).add(1, ModelProvider.OLLAMA, "ok", "ok")
 
     async def test_model_profile_application_initializes_telegram_tenant(self):
         class Users:
@@ -311,13 +425,29 @@ class ComprehensiveTests(unittest.IsolatedAsyncioTestCase):
             def get_model_profiles_repo(self, session):
                 return self.profiles
 
-        application = ModelProfileApplication(Database())
-        profile = await application.add(
-            777,
-            ModelProvider.OLLAMA,
-            "llama3.2",
-            "Developer Ollama",
-        )
+        config = type(
+            "Config",
+            (),
+            {
+                "TENANT_LIMITS": type(
+                    "Limits",
+                    (),
+                    {
+                        "MAX_MODEL_PROFILES": 10,
+                        "MAX_MODEL_NAME_LENGTH": 200,
+                        "MAX_DISPLAY_NAME_LENGTH": 200,
+                    },
+                )()
+            },
+        )()
+        with patch("src.services.model_profiles.get_config", return_value=config):
+            application = ModelProfileApplication(Database())
+            profile = await application.add(
+                777,
+                ModelProvider.OLLAMA,
+                "llama3.2",
+                "Developer Ollama",
+            )
 
         self.assertEqual(profile.user_id, 777)
 

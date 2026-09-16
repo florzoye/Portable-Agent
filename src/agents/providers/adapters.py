@@ -3,7 +3,12 @@ from langchain_openai import ChatOpenAI
 from langchain_xai import ChatXAI
 
 from data import get_config
-from src.agents.providers.base import ProviderAdapter, ProviderContext
+from src.agents.providers.base import (
+    ProviderAdapter,
+    ProviderContext,
+    ProviderError,
+    normalize_provider_error,
+)
 from src.services.models.providers import ModelProvider, ProviderCapabilities
 
 
@@ -16,15 +21,20 @@ class OpenAIProvider(ProviderAdapter):
     async def create_model(self, context: ProviderContext) -> ChatOpenAI:
         self.validate_configuration(context)
         base = get_config().BASE_LLM_CONFIG
-        return ChatOpenAI(
-            model=context.model_name,
-            max_tokens=base.MAX_TOKENS,
-            temperature=base.TEMPERATURE,
-            timeout=base.TIMEOUT,
-            verbose=base.VERBOSE,
-            api_key=context.api_key,
-            model_kwargs={"top_p": base.TOP_P},
-        )
+        try:
+            return ChatOpenAI(
+                model=context.model_name,
+                max_tokens=base.MAX_TOKENS,
+                temperature=base.TEMPERATURE,
+                timeout=base.TIMEOUT,
+                verbose=base.VERBOSE,
+                api_key=context.api_key,
+                model_kwargs={"top_p": base.TOP_P},
+            )
+        except ProviderError:
+            raise
+        except Exception as error:
+            raise normalize_provider_error(error) from error
 
 
 class XAIProvider(ProviderAdapter):
@@ -36,14 +46,19 @@ class XAIProvider(ProviderAdapter):
     async def create_model(self, context: ProviderContext) -> ChatXAI:
         self.validate_configuration(context)
         base = get_config().BASE_LLM_CONFIG
-        return ChatXAI(
-            model=context.model_name,
-            temperature=base.TEMPERATURE,
-            top_p=base.TOP_P,
-            verbose=base.VERBOSE,
-            api_key=context.api_key,
-            streaming=True,
-        )
+        try:
+            return ChatXAI(
+                model=context.model_name,
+                temperature=base.TEMPERATURE,
+                top_p=base.TOP_P,
+                verbose=base.VERBOSE,
+                api_key=context.api_key,
+                streaming=True,
+            )
+        except ProviderError:
+            raise
+        except Exception as error:
+            raise normalize_provider_error(error) from error
 
 
 class OllamaProvider(ProviderAdapter):
@@ -61,12 +76,17 @@ class OllamaProvider(ProviderAdapter):
         self.validate_configuration(context)
         base = get_config().BASE_LLM_CONFIG
         cfg = get_config().OLLAMA_CONFIG
-        return ChatOllama(
-            model=context.model_name,
-            num_predict=base.MAX_TOKENS,
-            temperature=base.TEMPERATURE,
-            timeout=base.TIMEOUT,
-            top_p=base.TOP_P,
-            verbose=base.VERBOSE,
-            base_url=cfg.OLLAMA_HOST,
-        )
+        try:
+            return ChatOllama(
+                model=context.model_name,
+                num_predict=base.MAX_TOKENS,
+                temperature=base.TEMPERATURE,
+                timeout=base.TIMEOUT,
+                top_p=base.TOP_P,
+                verbose=base.VERBOSE,
+                base_url=cfg.OLLAMA_HOST,
+            )
+        except ProviderError:
+            raise
+        except Exception as error:
+            raise normalize_provider_error(error) from error

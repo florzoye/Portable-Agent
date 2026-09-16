@@ -4,8 +4,8 @@ from db.model_profiles_protocol import ModelProfilesBase
 from db.database import Database
 from db.database_protocol import UsersBase
 from data import get_config
-from src.exceptions.config_exp import ConfigNotInitializedError
 from src.agents.providers.factory import UserModelFactory
+from data.configs.tenant_config import TenantLimitsConfig
 from src.agents.providers.base import ProviderConfigurationError
 from src.agents.providers.registry import ProviderRegistry
 from src.services.models.providers import (
@@ -20,9 +20,13 @@ class ModelProfileService:
         self,
         profiles: ModelProfilesBase,
         registry: ProviderRegistry | None = None,
+        limits: TenantLimitsConfig | None = None,
     ):
         self.profiles = profiles
         self.registry = registry or ProviderRegistry()
+        if limits is None:
+            raise ValueError("Tenant limits configuration is required")
+        self.limits = limits
 
     def available_providers(self) -> tuple[ProviderCapabilities, ...]:
         return self.registry.capabilities()
@@ -38,19 +42,7 @@ class ModelProfileService:
         display_name: str,
         api_key: str | None = None,
     ) -> UserModelProfile:
-        try:
-            limits = get_config().TENANT_LIMITS
-        except ConfigNotInitializedError:
-            limits = type(
-                "DefaultTenantLimits",
-                (),
-                {
-                    "MAX_MODEL_PROFILES": 10,
-                    "MAX_MODEL_NAME_LENGTH": 200,
-                    "MAX_DISPLAY_NAME_LENGTH": 200,
-                },
-            )()
-        if len(await self.profiles.list_for_user(user_id)) >= limits.MAX_MODEL_PROFILES:
+        if len(await self.profiles.list_for_user(user_id)) >= self.limits.MAX_MODEL_PROFILES:
             raise ValueError("Model profile limit reached")
         adapter = self.registry.get(provider)
         if adapter.capabilities.developer_managed:
@@ -65,9 +57,9 @@ class ModelProfileService:
         display_name = display_name.strip() or model_name
         if not model_name:
             raise ValueError("Model name is required")
-        if len(model_name) > limits.MAX_MODEL_NAME_LENGTH:
+        if len(model_name) > self.limits.MAX_MODEL_NAME_LENGTH:
             raise ValueError("Model name is too long")
-        if len(display_name) > limits.MAX_DISPLAY_NAME_LENGTH:
+        if len(display_name) > self.limits.MAX_DISPLAY_NAME_LENGTH:
             raise ValueError("Display name is too long")
         return await self.profiles.create(
             user_id,
@@ -95,6 +87,12 @@ class ModelProfileApplication:
     def __init__(self, database: Database):
         self.database = database
 
+    def _service(self, session) -> ModelProfileService:
+        return ModelProfileService(
+            self.database.get_model_profiles_repo(session),
+            limits=get_config().TENANT_LIMITS,
+        )
+
     async def _ensure_user(self, session, tg_id: int) -> None:
         users: UsersBase = self.database.get_users_repo(session)
         if await users.get_user_by_tg_id(tg_id) is not None:
@@ -104,9 +102,7 @@ class ModelProfileApplication:
 
     async def list(self, user_id: int) -> Sequence[UserModelProfile]:
         async with self.database.transaction() as session:
-            return await ModelProfileService(
-                self.database.get_model_profiles_repo(session)
-            ).list(user_id)
+            return await self._service(session).list(user_id)
 
     async def add(
         self,
@@ -118,18 +114,14 @@ class ModelProfileApplication:
     ) -> UserModelProfile:
         async with self.database.transaction() as session:
             await self._ensure_user(session, user_id)
-            return await ModelProfileService(
-                self.database.get_model_profiles_repo(session)
-            ).add(user_id, provider, model_name, display_name, api_key)
+            return await self._service(session).add(
+                user_id, provider, model_name, display_name, api_key
+            )
 
     async def activate(self, user_id: int, profile_id: int) -> UserModelProfile:
         async with self.database.transaction() as session:
-            return await ModelProfileService(
-                self.database.get_model_profiles_repo(session)
-            ).activate(user_id, profile_id)
+            return await self._service(session).activate(user_id, profile_id)
 
     async def delete(self, user_id: int, profile_id: int) -> bool:
         async with self.database.transaction() as session:
-            return await ModelProfileService(
-                self.database.get_model_profiles_repo(session)
-            ).delete(user_id, profile_id)
+            return await self._service(session).delete(user_id, profile_id)
