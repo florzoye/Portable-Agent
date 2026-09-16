@@ -153,6 +153,22 @@ class ComprehensiveTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('F.data.startswith("nav:calendar:")', source)
         self.assertIn('F.data.startswith("nav:reminders:")', source)
 
+    def test_guided_model_setup_uses_safe_intents_and_confirmation(self):
+        from pathlib import Path
+
+        source = Path("src/services/telegram/bot/handlers.py").read_text(
+            encoding="utf-8"
+        )
+        guidance = Path(
+            "src/services/telegram/model_setup_guidance.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn("detect_model_setup_request", source)
+        self.assertIn("guided:model:start:", source)
+        self.assertIn("ModelSetupIntent.LIST_PROVIDERS", source)
+        self.assertIn("ModelSetupIntent.SHOW_SETUP_HELP", source)
+        self.assertIn("Запуск настройки требует подтверждения", source)
+        self.assertIn("format_provider_help", guidance)
+
     def test_mcp_success_result_keeps_machine_data(self):
         result = tool_success("created", {"event_id": "event-1"})
 

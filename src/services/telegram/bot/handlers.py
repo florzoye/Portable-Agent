@@ -22,6 +22,12 @@ from src.agents.providers.base import provider_user_message
 from src.services.dependencies import get_agent, get_user_model
 from src.services.models.providers import ModelProvider
 from src.services.dependencies import get_model_profiles
+from src.services.telegram.model_setup_guidance import (
+    ModelSetupIntent,
+    detect_model_setup_request,
+    format_provider_help,
+    setup_help_text,
+)
 from src.factories.checkpointer_factory import get_checkpointer, close_checkpointer
 from src.agents.tools.reminders import close_reminders_client
 from src.agents.tools.calendar import close_calendar_client
@@ -62,6 +68,29 @@ def _setup_keyboard() -> InlineKeyboardMarkup:
                     callback_data="model:cancel",
                 ),
             ]
+        ]
+    )
+
+
+def _guided_setup_keyboard(
+    provider: str | None = None,
+) -> InlineKeyboardMarkup:
+    providers = ("openai", "xai", "ollama") if provider is None else (provider,)
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            *[
+                [
+                    InlineKeyboardButton(
+                        text=f"Начать настройку {candidate}",
+                        callback_data=f"guided:model:start:{candidate}",
+                    )
+                ]
+                for candidate in providers
+            ],
+            [
+                InlineKeyboardButton(text="Список провайдеров", callback_data="guided:model:providers"),
+                InlineKeyboardButton(text="❌ Отмена", callback_data="nav:cancel"),
+            ],
         ]
     )
 
@@ -294,6 +323,36 @@ def register_handlers(dp: Dispatcher):
         await callback.message.edit_text("Раздел закрыт.")
         await callback.answer()
 
+    @dp.callback_query(F.data == "guided:model:providers")
+    async def handle_guided_providers(callback: CallbackQuery):
+        capabilities = get_model_profiles().available_providers()
+        await callback.message.edit_text(
+            format_provider_help(capabilities),
+            reply_markup=_guided_setup_keyboard(),
+        )
+        await callback.answer()
+
+    @dp.callback_query(F.data.startswith("guided:model:start:"))
+    async def handle_guided_setup_start(callback: CallbackQuery):
+        provider = callback.data.rsplit(":", 1)[1]
+        available = {
+            capability.provider.value
+            for capability in get_model_profiles().available_providers()
+        }
+        if provider not in available:
+            await callback.answer("Провайдер больше недоступен.", show_alert=True)
+            return
+        await callback.message.edit_text(
+            _setup_prompt(provider, "model"),
+            reply_markup=_setup_keyboard(),
+        )
+        await get_config().redis_client.setex(
+            _model_setup_key(callback.from_user.id),
+            600,
+            json.dumps({"provider": provider, "step": "model"}),
+        )
+        await callback.answer()
+
     @dp.message(F.text == "ℹ️ Помощь")
     async def handle_help_button(message: Message):
         await message.answer(
@@ -441,6 +500,27 @@ def register_handlers(dp: Dispatcher):
         cfg = get_config()
 
         try:
+            guided_request = detect_model_setup_request(text)
+            if guided_request is not None:
+                if guided_request.intent is ModelSetupIntent.LIST_PROVIDERS:
+                    await message.answer(
+                        format_provider_help(get_model_profiles().available_providers()),
+                        reply_markup=_guided_setup_keyboard(),
+                    )
+                    return
+                if guided_request.intent is ModelSetupIntent.SHOW_SETUP_HELP:
+                    await message.answer(
+                        setup_help_text(),
+                        reply_markup=_guided_setup_keyboard(),
+                    )
+                    return
+                await message.answer(
+                    "Запуск настройки требует подтверждения. "
+                    "Выберите провайдера ниже.",
+                    reply_markup=_guided_setup_keyboard(guided_request.provider),
+                )
+                return
+
             setup_raw = await cfg.redis_client.get(_model_setup_key(tg_id))
             if setup_raw:
                 setup = json.loads(setup_raw)
