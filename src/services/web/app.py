@@ -61,6 +61,8 @@ def _model_id(llm) -> str:
 
 
 def _build_model_list() -> list[dict]:
+    if os.environ.get("ALLOW_OPERATOR_FALLBACK", "false").lower() != "true":
+        return []
     wrappers = LLMInitializer.get_wrappers()
     llms = LLMInitializer.get_llms()
     return [

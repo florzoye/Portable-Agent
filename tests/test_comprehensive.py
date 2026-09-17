@@ -205,6 +205,16 @@ class ComprehensiveTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('await get_model_profiles().deactivate(user_id)', app_source)
         self.assertIn("Введите имя модели длиной от 1 до 200 символов", source)
 
+    def test_operator_fallback_is_explicitly_opt_in(self):
+        from os import environ
+        from unittest.mock import patch
+
+        from src.agents.llms.initializer import LLMInitializer
+
+        with patch.dict(environ, {"ALLOW_OPERATOR_FALLBACK": "false"}, clear=False):
+            with self.assertRaises(RuntimeError):
+                LLMInitializer.get_selected()
+
     def test_telegram_wizard_source_deletes_failed_api_key_messages(self):
         from pathlib import Path
 

@@ -1,5 +1,6 @@
 import pkgutil
 import importlib
+import os
 from typing import List, Type
 from loguru import logger
 
@@ -37,6 +38,10 @@ class LLMInitializer:
     
     @classmethod
     def get_selected(cls) -> BaseChatModel:
+        if os.environ.get("ALLOW_OPERATOR_FALLBACK", "false").lower() != "true":
+            raise RuntimeError(
+                "No tenant model profile is active and operator fallback is disabled"
+            )
         if cls._selected is None:
             if not cls._llm_instances:
                 raise RuntimeError("LLM is not initialized")
