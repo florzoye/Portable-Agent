@@ -7,8 +7,6 @@ services:
       MONITORING_DB_PATH: /app/data/monitoring.db
     volumes:
       - sqlite-data:/app/data
-    ports:
-      - "8010:8010"
     networks:
       - app-net
     restart: unless-stopped
