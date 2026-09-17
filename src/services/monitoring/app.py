@@ -18,7 +18,7 @@ _DASHBOARD_PATH = Path(__file__).with_name("dashboard.html")
 class MonitoringEvent(BaseModel):
     event: str = Field(min_length=1, max_length=100)
     model: str | None = Field(default=None, max_length=200)
-    user_id: str | None = Field(default=None, max_length=100)
+    user_id: str | int | None = Field(default=None)
     tool: str | None = Field(default=None, max_length=100)
     status: int | None = None
     duration_ms: float | None = None

@@ -1083,6 +1083,16 @@ class ComprehensiveTests(unittest.IsolatedAsyncioTestCase):
                     monitoring.MonitoringEvent(event="test"),
                 )
 
+    def test_monitoring_accepts_integer_user_id_from_observability(self):
+        from src.services.monitoring.app import MonitoringEvent
+
+        event = MonitoringEvent(
+            event="web.authenticated",
+            user_id=1694304302,
+        )
+
+        self.assertEqual(event.user_id, 1694304302)
+
     async def test_websocket_rejects_untrusted_origin_before_accept(self):
         from src.services.web.app import websocket_chat
 

@@ -40,6 +40,7 @@ from src.services.dependencies import get_model_profiles
 from src.services.models.providers import ModelProvider
 from src.agents.providers.base import ProviderConfigurationError
 from src.agents.providers.base import provider_user_message
+from db.database import global_db_manager
 
 STATIC_DIR = pathlib.Path(__file__).parent / "static"
 SESSION_COOKIE = "portable_session"
@@ -127,6 +128,8 @@ class WebSocketSender(StreamSender):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    await global_db_manager.setup()
+    await global_db_manager.create_tables()
     await get_tools()
     await LLMInitializer.initialize()
     await get_checkpointer()
@@ -135,6 +138,7 @@ async def lifespan(app: FastAPI):
     await close_calendar_client()
     await close_reminders_client()
     await close_checkpointer()
+    await global_db_manager.close()
     logger.info("🤖 Web assistant stopped")
 
 app = FastAPI(title="AI Assistant", lifespan=lifespan)
