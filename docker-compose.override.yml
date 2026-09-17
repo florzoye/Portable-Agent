@@ -1,4 +1,8 @@
 services:
+  fastapi-calendar:
+    ports:
+      - "8001:8001"
+
   mcp-calendar:
     ports:
       - "8002:8002"
@@ -10,6 +14,10 @@ services:
   flower:
     ports:
       - "5555:5555"
+
+  monitoring:
+    ports:
+      - "8010:8010"
 
   web-assistant:
     ports:

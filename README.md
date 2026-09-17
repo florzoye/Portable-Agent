@@ -94,7 +94,7 @@ upstream check is explicit and uses the adapter's `create_model` path.
 
 | Service | Host port (dev) | Container port | Description |
 |---|---|---|---|
-| `fastapi-calendar` | — | 8001 | Internal Google Calendar REST API (not published to the host) |
+| `fastapi-calendar` | 8001 (dev) | 8001 | Google Calendar REST API; publish only with the local development override |
 | `mcp-calendar` | 8002 | 8002 | MCP server wrapping Calendar API via SSE |
 | `mcp-reminders` | 8003 | 8003 | MCP server for scheduling reminders and follow-ups |
 | `telegram-bot` | — | — | aiogram bot with LangGraph agent |
@@ -152,7 +152,7 @@ docker compose \
 - **Telegram**: open your bot and send any message
 - **Web UI**: `http://localhost:8080`
 - **Flower** (Celery monitor): `http://localhost:5555`
-- **Monitoring dashboard**: `http://localhost:8010/dashboard`
+- **Monitoring dashboard**: `http://localhost:8010/dashboard` (local development override only)
 
 The Calendar REST API is intentionally reachable only from the internal Docker
 network. Calendar MCP calls authenticate with `INTERNAL_API_KEY`; use the
