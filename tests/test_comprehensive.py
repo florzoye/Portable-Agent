@@ -42,6 +42,7 @@ from src.agents.providers.base import ProviderAdapter, ProviderContext
 from src.agents.providers.adapters import OpenAIProvider
 from src.services.dependencies import (
     NoActiveModelError,
+    get_agent_for_model,
     get_session_model,
     resolve_model,
 )
@@ -206,6 +207,26 @@ class ComprehensiveTests(unittest.IsolatedAsyncioTestCase):
 
     def test_agent_requires_model_when_fallback_disabled(self):
         self.assertTrue(issubclass(NoActiveModelError, RuntimeError))
+
+    async def test_agent_for_resolved_model_initializes_dependencies(self):
+        model = object()
+        factory = type("Factory", (), {"aget_agent": AsyncMock(return_value="agent")})()
+        with patch(
+            "src.services.dependencies.get_checkpointer",
+            new=AsyncMock(return_value="checkpointer"),
+        ) as get_checkpointer, patch(
+            "src.services.dependencies.get_tools",
+            new=AsyncMock(return_value=["tool"]),
+        ) as get_tools, patch(
+            "src.services.dependencies.AgentsFactory",
+            return_value=factory,
+        ) as agents_factory:
+            result = await get_agent_for_model("thread-42", 42, model)
+
+        self.assertEqual(result, "agent")
+        get_checkpointer.assert_awaited_once()
+        get_tools.assert_awaited_once()
+        agents_factory.assert_called_once()
 
     async def test_resolve_model_raises_domain_error_without_active_profile(self):
         with patch(

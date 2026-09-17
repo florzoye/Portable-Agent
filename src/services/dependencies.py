@@ -73,9 +73,6 @@ async def get_agent(
     CompiledStateGraph is stateless — dialog state is persisted in checkpointer.
     session_id is used as thread_id.
     """
-    checkpointer = await get_checkpointer()
-    tools = await get_tools()
-
     model = await resolve_model(session_id, user_id)
     return await get_agent_for_model(session_id, user_id, model)
 
@@ -86,6 +83,8 @@ async def get_agent_for_model(
     model: BaseChatModel,
 ) -> CompiledStateGraph:
     """Build an agent from a model already resolved for this tenant."""
+    checkpointer = await get_checkpointer()
+    tools = await get_tools()
     return await AgentsFactory(
         name="web-assistant",
         model=model,
