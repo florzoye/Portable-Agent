@@ -22,6 +22,7 @@ from src.agents.providers.base import provider_user_message
 from src.services.dependencies import (
     NoActiveModelError,
     get_agent,
+    get_agent_for_model,
     resolve_model,
 )
 from src.services.models.providers import ModelProvider
@@ -594,7 +595,7 @@ def register_handlers(dp: Dispatcher):
                     )
                     return
             llm = await resolve_model(str(tg_id), tg_id)
-            agent = await get_agent(str(tg_id), tg_id, llm)
+            agent = await get_agent_for_model(str(tg_id), tg_id, llm)
             invoker = AgentInvoker(agent, tg_id)
 
             response = await invoker.invoke(

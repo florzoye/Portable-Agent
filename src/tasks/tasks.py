@@ -41,7 +41,7 @@ async def _ask(tg_id: int, content: str) -> str:
     from data import get_config
 
     await LLMInitializer.initialize()
-    agent = await get_agent(tg_id)
+    agent = await get_agent(str(tg_id), int(tg_id))
     cfg = get_config()
 
     result = await agent.ainvoke(

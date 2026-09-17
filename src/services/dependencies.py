@@ -67,7 +67,6 @@ async def resolve_model(
 async def get_agent(
     session_id: str,
     user_id: int | None = None,
-    model: BaseChatModel | None = None,
 ) -> CompiledStateGraph:
     """
     Creates an agent for a specific web session.
@@ -77,7 +76,16 @@ async def get_agent(
     checkpointer = await get_checkpointer()
     tools = await get_tools()
 
-    model = model or await resolve_model(session_id, user_id)
+    model = await resolve_model(session_id, user_id)
+    return await get_agent_for_model(session_id, user_id, model)
+
+
+async def get_agent_for_model(
+    session_id: str,
+    user_id: int | None,
+    model: BaseChatModel,
+) -> CompiledStateGraph:
+    """Build an agent from a model already resolved for this tenant."""
     return await AgentsFactory(
         name="web-assistant",
         model=model,

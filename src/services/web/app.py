@@ -23,6 +23,7 @@ from src.factories.tools_factory import get_tools
 from src.services.dependencies import (
     clear_session_model,
     get_agent,
+    get_agent_for_model,
     NoActiveModelError,
     get_session_model,
     get_user_model,
@@ -470,7 +471,7 @@ async def websocket_chat(websocket: WebSocket):
             try:
                 async with thread_lock:
                     llm = await resolve_model(thread_id, user_id)
-                    agent = await get_agent(thread_id, user_id, llm)
+                    agent = await get_agent_for_model(thread_id, user_id, llm)
                     invoker = AgentInvoker(agent, thread_id)
                     response = await asyncio.wait_for(
                         invoker.invoke(
