@@ -422,8 +422,9 @@
 
   function startApp() {
     authScreen.remove();
-    loadModels();
-    connect();
+    loadModels().then(connect).catch(() => {
+      modelSelect.style.display = "none";
+    });
   }
 
   logoutButton.addEventListener("click", async () => {
@@ -477,11 +478,7 @@
         modelSelect.style.display = "none";
         inputEl.disabled = true;
         sendBtn.disabled = true;
-        appendBubble(
-          "assistant",
-          "Активная модель не выбрана. Откройте «Модели» и создайте или активируйте профиль.",
-          true,
-        );
+        showNoActiveModel();
         return;
       }
       modelSelect.style.display = "";
@@ -711,6 +708,17 @@
     wrap.appendChild(bubble);
     messagesEl.appendChild(wrap);
     scrollToBottom();
+    return wrap;
+  }
+
+  function showNoActiveModel() {
+    document.querySelector("[data-no-active-model]")?.remove();
+    const wrap = appendBubble(
+      "assistant",
+      "Активная модель не выбрана. Откройте «Модели» и создайте или активируйте профиль.",
+      true,
+    );
+    wrap.dataset.noActiveModel = "true";
   }
 
   function showTyping() {

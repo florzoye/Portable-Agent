@@ -22,7 +22,7 @@ from src.agents.providers.base import provider_user_message
 from src.services.dependencies import (
     NoActiveModelError,
     get_agent,
-    get_user_model,
+    resolve_model,
 )
 from src.services.models.providers import ModelProvider
 from src.services.dependencies import get_model_profiles
@@ -202,6 +202,10 @@ async def _send_models(message: Message) -> None:
     await message.answer(text, reply_markup=await _model_keyboard(message.from_user.id))
 
 async def on_startup():
+    from db.database import global_db_manager
+
+    await global_db_manager.setup()
+    await global_db_manager.create_tables()
     try:
         await get_tools()
     except (OSError, RuntimeError, ValueError):
@@ -218,6 +222,8 @@ async def on_startup():
 
 
 async def on_shutdown():
+    from db.database import global_db_manager
+
     try:
         await close_calendar_client()
     except (OSError, RuntimeError, ValueError):
@@ -232,6 +238,7 @@ async def on_shutdown():
         await close_checkpointer()
     except (OSError, RuntimeError, ValueError):
         logger.exception("Failed to close checkpointer")
+    await global_db_manager.close()
 
     logger.info("🤖 Assistant stopped")
 
@@ -586,13 +593,9 @@ def register_handlers(dp: Dispatcher):
                         f"✅ {provider.value} модель {setup['model_name']} добавлена и активирована."
                     )
                     return
-            agent = await get_agent(tg_id)
+            llm = await resolve_model(str(tg_id), tg_id)
+            agent = await get_agent(str(tg_id), tg_id, llm)
             invoker = AgentInvoker(agent, tg_id)
-            llm = await get_user_model(tg_id)
-            if llm is None:
-                raise NoActiveModelError(
-                    "Сначала создайте или активируйте профиль модели"
-                )
 
             response = await invoker.invoke(
                 user_message=text,

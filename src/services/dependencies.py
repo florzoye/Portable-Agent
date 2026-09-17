@@ -51,7 +51,24 @@ async def get_user_model(user_id: int) -> BaseChatModel | None:
     return await _model_profiles.create_active_model(user_id)
 
 
-async def get_agent(session_id: str, user_id: int | None = None) -> CompiledStateGraph:
+async def resolve_model(
+    session_id: str,
+    user_id: int | None = None,
+) -> BaseChatModel:
+    user_model = await get_user_model(user_id) if user_id is not None else None
+    model = user_model or get_session_model(session_id)
+    if model is None:
+        raise NoActiveModelError(
+            "No active tenant model profile is configured"
+        )
+    return model
+
+
+async def get_agent(
+    session_id: str,
+    user_id: int | None = None,
+    model: BaseChatModel | None = None,
+) -> CompiledStateGraph:
     """
     Creates an agent for a specific web session.
     CompiledStateGraph is stateless — dialog state is persisted in checkpointer.
@@ -60,12 +77,7 @@ async def get_agent(session_id: str, user_id: int | None = None) -> CompiledStat
     checkpointer = await get_checkpointer()
     tools = await get_tools()
 
-    user_model = await get_user_model(user_id) if user_id is not None else None
-    model = user_model or get_session_model(session_id)
-    if model is None:
-        raise NoActiveModelError(
-            "No active tenant model profile is configured"
-        )
+    model = model or await resolve_model(session_id, user_id)
     return await AgentsFactory(
         name="web-assistant",
         model=model,

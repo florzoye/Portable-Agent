@@ -40,7 +40,12 @@ from src.agents.providers.base import (
 from src.agents.providers.factory import UserModelFactory
 from src.agents.providers.base import ProviderAdapter, ProviderContext
 from src.agents.providers.adapters import OpenAIProvider
-from src.services.dependencies import NoActiveModelError, get_session_model
+from src.services.dependencies import (
+    NoActiveModelError,
+    get_session_model,
+    resolve_model,
+)
+from src.services.telegram.bot.handlers import on_startup, on_shutdown
 
 
 class FakeRedis:
@@ -201,6 +206,56 @@ class ComprehensiveTests(unittest.IsolatedAsyncioTestCase):
 
     def test_agent_requires_model_when_fallback_disabled(self):
         self.assertTrue(issubclass(NoActiveModelError, RuntimeError))
+
+    async def test_resolve_model_raises_domain_error_without_active_profile(self):
+        with patch(
+            "src.services.dependencies.get_user_model",
+            new=AsyncMock(return_value=None),
+        ), patch(
+            "src.services.dependencies.get_session_model",
+            return_value=None,
+        ):
+            with self.assertRaises(NoActiveModelError):
+                await resolve_model("thread-42", 42)
+
+    async def test_telegram_startup_initializes_database_before_handlers(self):
+        database = type(
+            "Database",
+            (),
+            {
+                "setup": AsyncMock(),
+                "create_tables": AsyncMock(),
+                "close": AsyncMock(),
+            },
+        )()
+        with patch(
+            "db.database.global_db_manager",
+            database,
+        ), patch(
+            "src.services.telegram.bot.handlers.get_tools",
+            new=AsyncMock(),
+        ), patch(
+            "src.services.telegram.bot.handlers.LLMInitializer.initialize",
+            new=AsyncMock(),
+        ), patch(
+            "src.services.telegram.bot.handlers.get_checkpointer",
+            new=AsyncMock(),
+        ), patch(
+            "src.services.telegram.bot.handlers.close_calendar_client",
+            new=AsyncMock(),
+        ), patch(
+            "src.services.telegram.bot.handlers.close_reminders_client",
+            new=AsyncMock(),
+        ), patch(
+            "src.services.telegram.bot.handlers.close_checkpointer",
+            new=AsyncMock(),
+        ):
+            await on_startup()
+            await on_shutdown()
+
+        database.setup.assert_awaited_once()
+        database.create_tables.assert_awaited_once()
+        database.close.assert_awaited_once()
 
     async def test_provider_upstream_diagnostic_has_a_cooldown_slot(self):
         redis = FakeRedis()
