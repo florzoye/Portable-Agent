@@ -387,6 +387,7 @@
   const logoutButton = document.getElementById("logout-button");
 
   let ws, isWaiting = false, tagTimer = null;
+  let hasActiveModel = false;
 
   async function loginWithCode() {
     loginButton.disabled = true;
@@ -449,7 +450,9 @@
       if (curRes.status === 401) throw new Error("AUTH_REQUIRED");
       const { models }       = await modelsRes.json();
       const { profiles }     = await profilesRes.json();
-      const { active_model } = await curRes.json();
+      const current = await curRes.json();
+      const { active_model } = current;
+      hasActiveModel = current.status !== "no_active_profile" && Boolean(active_model);
 
       modelSelect.innerHTML = "";
       const profileGroup = document.createElement("optgroup");
@@ -472,14 +475,27 @@
       if (models.length) modelSelect.appendChild(fallbackGroup);
       if (!profiles.length && !models.length) {
         modelSelect.style.display = "none";
+        inputEl.disabled = true;
+        sendBtn.disabled = true;
+        appendBubble(
+          "assistant",
+          "Активная модель не выбрана. Откройте «Модели» и создайте или активируйте профиль.",
+          true,
+        );
         return;
       }
       modelSelect.style.display = "";
       const activeProfile = profiles.find(profile => profile.is_active);
-      modelSelect.value = activeProfile
-        ? `profile:${activeProfile.id}`
-        : `fallback:${active_model}`;
+      if (activeProfile) {
+        modelSelect.value = `profile:${activeProfile.id}`;
+      } else if (active_model) {
+        modelSelect.value = `fallback:${active_model}`;
+      }
       modelSelect.disabled = false;
+      if (!hasActiveModel) {
+        inputEl.disabled = true;
+        sendBtn.disabled = true;
+      }
     } catch (error) {
       if (error?.message === "AUTH_REQUIRED") showAuth("Сессия истекла, войдите снова");
       modelSelect.style.display = "none";
@@ -587,6 +603,7 @@
         if (res.status === 401) showAuth("Сессия истекла, войдите снова");
         else if (!res.ok) throw new Error("Не удалось активировать профиль");
         else {
+          hasActiveModel = true;
           await loadModels();
           flashTag();
         }
@@ -618,7 +635,9 @@
 
     ws.onopen = () => {
       statusDot.classList.add("connected");
-      inputEl.disabled = false; sendBtn.disabled = false; inputEl.focus();
+      inputEl.disabled = !hasActiveModel;
+      sendBtn.disabled = !hasActiveModel;
+      inputEl.focus();
     };
     ws.onclose = event => {
       statusDot.classList.remove("connected");
@@ -635,7 +654,15 @@
       removeTyping();
       isWaiting = false; sendBtn.disabled = false;
       if (msg.type === "message") { finalizeStreaming(msg.content); }
-      else if (msg.type === "error") { discardStreamingBubble(); appendBubble("assistant", msg.content, true); }
+      else if (msg.type === "error") {
+        if (msg.code === "NO_ACTIVE_MODEL") {
+          hasActiveModel = false;
+          inputEl.disabled = true;
+          sendBtn.disabled = true;
+        }
+        discardStreamingBubble();
+        appendBubble("assistant", msg.content, true);
+      }
     };
   }
 

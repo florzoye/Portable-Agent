@@ -25,6 +25,7 @@ from src.services.dependencies import (
     get_agent,
     get_session_model,
     get_user_model,
+    NoActiveModelError,
     set_session_model,
 )
 from utils.renderers import MessageRenderer
@@ -405,6 +406,15 @@ async def current_model(
     profiles = await get_model_profiles().list(user_id)
     active_profile = next((profile for profile in profiles if profile.is_active), None)
     llm = await get_user_model(user_id) or get_session_model(thread_id)
+    if llm is None:
+        return {
+            "session_id": thread_id,
+            "active_model": None,
+            "active_profile_id": None,
+            "source": "none",
+            "status": "no_active_profile",
+            "message": "Создайте или активируйте профиль модели",
+        }
     return {
         "session_id": thread_id,
         "active_model": _model_id(llm),
@@ -474,6 +484,12 @@ async def websocket_chat(websocket: WebSocket):
                 html = MessageRenderer.for_web(response)
                 await websocket.send_json({"type": "message", "content": html})
 
+            except NoActiveModelError:
+                await websocket.send_json({
+                    "type": "error",
+                    "code": "NO_ACTIVE_MODEL",
+                    "content": "Сначала создайте или активируйте профиль модели",
+                })
             except Exception as error:
                 logger.exception("Agent error for session={}", thread_id)
                 await websocket.send_json({

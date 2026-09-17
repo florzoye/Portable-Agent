@@ -2,7 +2,7 @@ import json
 import os
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy import insert
 
@@ -16,6 +16,7 @@ from src.services.web.app import (
     activate_model_profile,
     delete_model_profile,
     list_model_profiles,
+    current_model,
     _get_session_context,
 )
 from src.services.telegram.bot.handlers import _setup_keyboard, _setup_prompt
@@ -39,6 +40,7 @@ from src.agents.providers.base import (
 from src.agents.providers.factory import UserModelFactory
 from src.agents.providers.base import ProviderAdapter, ProviderContext
 from src.agents.providers.adapters import OpenAIProvider
+from src.services.dependencies import NoActiveModelError, get_session_model
 
 
 class FakeRedis:
@@ -169,6 +171,37 @@ class ComprehensiveTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(error.exception.status_code, 401)
 
+    async def test_current_model_returns_empty_state_without_profile(self):
+        with patch(
+            "src.services.web.app._get_session_context",
+            return_value=(42, "thread-42"),
+        ), patch(
+            "src.services.web.app.get_model_profiles"
+        ) as profiles, patch(
+            "src.services.web.app.get_user_model",
+            return_value=None,
+        ), patch(
+            "src.services.web.app.get_session_model",
+            return_value=None,
+        ):
+            profiles.return_value.list = AsyncMock(return_value=[])
+            result = await current_model("session-42")
+
+        self.assertEqual(result["status"], "no_active_profile")
+        self.assertIsNone(result["active_model"])
+        self.assertEqual(result["source"], "none")
+
+    def test_session_model_returns_none_when_operator_fallback_disabled(self):
+        with patch.dict(os.environ, {"ALLOW_OPERATOR_FALLBACK": "false"}, clear=False):
+            with patch(
+                "src.services.dependencies._session_models",
+                {},
+            ):
+                self.assertIsNone(get_session_model("thread-42"))
+
+    def test_agent_requires_model_when_fallback_disabled(self):
+        self.assertTrue(issubclass(NoActiveModelError, RuntimeError))
+
     async def test_provider_upstream_diagnostic_has_a_cooldown_slot(self):
         redis = FakeRedis()
         config = type("Config", (), {"redis_client": redis})()
@@ -204,6 +237,7 @@ class ComprehensiveTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("/model-profiles/${profileId}/activate", source)
         self.assertIn('await get_model_profiles().deactivate(user_id)', app_source)
         self.assertIn("Введите имя модели длиной от 1 до 200 символов", source)
+        self.assertIn("no_active_profile", source)
 
     def test_operator_fallback_is_explicitly_opt_in(self):
         from os import environ

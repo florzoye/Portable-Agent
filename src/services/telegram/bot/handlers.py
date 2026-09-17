@@ -19,7 +19,11 @@ from src.factories.tools_factory import get_tools
 from src.factories.agents_factory import AgentsFactory
 from src.agents.llms.initializer import LLMInitializer
 from src.agents.providers.base import provider_user_message
-from src.services.dependencies import get_agent, get_user_model
+from src.services.dependencies import (
+    NoActiveModelError,
+    get_agent,
+    get_user_model,
+)
 from src.services.models.providers import ModelProvider
 from src.services.dependencies import get_model_profiles
 from src.services.telegram.model_setup_guidance import (
@@ -584,7 +588,11 @@ def register_handlers(dp: Dispatcher):
                     return
             agent = await get_agent(tg_id)
             invoker = AgentInvoker(agent, tg_id)
-            llm = await get_user_model(tg_id) or LLMInitializer.get_selected()
+            llm = await get_user_model(tg_id)
+            if llm is None:
+                raise NoActiveModelError(
+                    "Сначала создайте или активируйте профиль модели"
+                )
 
             response = await invoker.invoke(
                 user_message=text,
@@ -593,6 +601,10 @@ def register_handlers(dp: Dispatcher):
             )
             await send_message(chat_id, response)
 
+        except NoActiveModelError:
+            await message.answer(
+                "Активная модель не выбрана. Настройте профиль модели через раздел «Модели»."
+            )
         except (OSError, RuntimeError, ValueError) as error:
             logger.exception("Agent error for tg_id={}", tg_id)
             await message.answer(f"⚠️ {provider_user_message(error)}")

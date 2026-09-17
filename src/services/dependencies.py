@@ -1,3 +1,5 @@
+import os
+
 from langgraph.graph.state import CompiledStateGraph
 from langchain_core.language_models import BaseChatModel
 
@@ -12,6 +14,11 @@ from src.agents.providers.registry import ProviderRegistry
 
 _session_models: dict[str, BaseChatModel] = {}
 _model_profiles = ModelProfileApplication(global_db_manager, ProviderRegistry())
+
+
+class NoActiveModelError(RuntimeError):
+    """Raised when a tenant has no model and operator fallback is disabled."""
+
 
 
 def get_model_profiles() -> ModelProfileApplication:
@@ -31,8 +38,13 @@ def clear_session_model(session_id: str) -> None:
     _session_models.pop(session_id, None)
 
 
-def get_session_model(session_id: str) -> BaseChatModel:
-    return _session_models.get(session_id) or LLMInitializer.get_selected()
+def get_session_model(session_id: str) -> BaseChatModel | None:
+    session_model = _session_models.get(session_id)
+    if session_model is not None:
+        return session_model
+    if os.environ.get("ALLOW_OPERATOR_FALLBACK", "false").lower() != "true":
+        return None
+    return LLMInitializer.get_selected()
 
 
 async def get_user_model(user_id: int) -> BaseChatModel | None:
@@ -49,9 +61,14 @@ async def get_agent(session_id: str, user_id: int | None = None) -> CompiledStat
     tools = await get_tools()
 
     user_model = await get_user_model(user_id) if user_id is not None else None
+    model = user_model or get_session_model(session_id)
+    if model is None:
+        raise NoActiveModelError(
+            "No active tenant model profile is configured"
+        )
     return await AgentsFactory(
         name="web-assistant",
-        model=user_model or get_session_model(session_id),
+        model=model,
         tools=tools,
         system_prompt=AgentSystemPrompt(),
         checkpointer=checkpointer,
