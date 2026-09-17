@@ -176,6 +176,13 @@ tenant-scoped, and rate-limited.
 - Keep Telegram model setup deterministic and confirmation-gated; bounded
   guidance intents may explain/list providers but must not mutate profiles
   directly.
+- Telegram navigation uses slash commands and inline service screens; do not
+  reintroduce persistent reply keyboards.
+- Chat mode is an explicit FSM state. While active, ordinary text goes to the
+  tenant-resolved agent and only `/cancel` or the inline exit action leaves it.
+- Calendar and reminders are agent-driven natural-language workflows, not
+  Telegram CRUD handlers. Preserve server-owned tenant binding and require
+  explicit intent before side effects.
 
 ## Test and change-location conventions
 

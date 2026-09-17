@@ -3,6 +3,8 @@ import sys
 from loguru import logger
 from aiogram import Bot, Dispatcher
 from aiogram.client.session.aiohttp import AiohttpSession
+from aiogram.fsm.storage.redis import RedisStorage
+from aiogram.types import BotCommand
 from langchain_core.language_models import BaseChatModel
 from aiogram.exceptions import TelegramNetworkError, TelegramAPIError
 
@@ -38,10 +40,23 @@ async def _run_bot():
     bot = Bot(token=cfg.TG_SETTINGS.BOT_TOKEN, session=session)
     init_telegram_sender(bot)
 
-    dp = Dispatcher()
+    dp = Dispatcher(storage=RedisStorage(redis=cfg.redis_client))
     register_handlers(dp)
     dp.startup.register(on_startup)
     dp.shutdown.register(on_shutdown)
+    await bot.set_my_commands(
+        [
+            BotCommand(command="start", description="Открыть меню"),
+            BotCommand(command="menu", description="Показать меню"),
+            BotCommand(command="chat", description="Войти в режим чата"),
+            BotCommand(command="cancel", description="Выйти из чата или отменить действие"),
+            BotCommand(command="calendar", description="Календарь через чат"),
+            BotCommand(command="reminders", description="Напоминания через чат"),
+            BotCommand(command="models", description="Мои модели"),
+            BotCommand(command="web", description="Код для входа в Web UI"),
+            BotCommand(command="help", description="Помощь и примеры"),
+        ]
+    )
 
     logger.info("🚀 Start bot...")
     await dp.start_polling(bot)

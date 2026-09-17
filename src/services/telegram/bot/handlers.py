@@ -7,21 +7,23 @@ from aiogram.enums import ContentType, ParseMode
 from aiogram.exceptions import TelegramAPIError
 from aiogram.types import (
     CallbackQuery,
-    KeyboardButton,
     Message,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
-    ReplyKeyboardMarkup,
+    ReplyKeyboardRemove,
 )
+from aiogram.fsm.context import FSMContext
 
 from src.agents.chat import AgentInvoker
 from src.factories.tools_factory import get_tools
 from src.factories.agents_factory import AgentsFactory
 from src.agents.llms.initializer import LLMInitializer
-from src.agents.providers.base import provider_user_message
+from src.agents.providers.base import (
+    ProviderConfigurationError,
+    provider_user_message,
+)
 from src.services.dependencies import (
     NoActiveModelError,
-    get_agent,
     get_agent_for_model,
     resolve_model,
 )
@@ -33,6 +35,7 @@ from src.services.telegram.model_setup_guidance import (
     format_provider_help,
     setup_help_text,
 )
+from src.services.telegram.bot.states import TelegramMode
 from src.factories.checkpointer_factory import get_checkpointer, close_checkpointer
 from src.agents.tools.reminders import close_reminders_client
 from src.agents.tools.calendar import close_calendar_client
@@ -106,38 +109,31 @@ def _guided_setup_keyboard(
     )
 
 
-def _main_keyboard() -> ReplyKeyboardMarkup:
-    return ReplyKeyboardMarkup(
-        keyboard=[
-            [KeyboardButton(text="💬 Чат"), KeyboardButton(text="🤖 Модели")],
-            [KeyboardButton(text="📅 Календарь"), KeyboardButton(text="⏰ Напоминания")],
-            [KeyboardButton(text="ℹ️ Помощь"), KeyboardButton(text="⚙️ Настройки")],
-            [KeyboardButton(text="❌ Отмена")],
-        ],
-        resize_keyboard=True,
-        is_persistent=True,
-        input_field_placeholder="Выберите действие или напишите сообщение",
+def _menu_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="💬 Открыть чат", callback_data="menu:chat")],
+            [InlineKeyboardButton(text="🤖 Мои модели", callback_data="menu:models")],
+            [InlineKeyboardButton(text="🌐 Войти в Web UI", callback_data="menu:web")],
+            [InlineKeyboardButton(text="ℹ️ Помощь", callback_data="menu:help")],
+        ]
     )
 
 
-def _section_keyboard(section: str) -> InlineKeyboardMarkup:
-    if section == "calendar":
-        rows = [
-            [InlineKeyboardButton(text="➕ Создать событие", callback_data="nav:calendar:create")],
-            [InlineKeyboardButton(text="📋 Мои события", callback_data="nav:calendar:list")],
-        ]
-    else:
-        rows = [
-            [InlineKeyboardButton(text="➕ Создать напоминание", callback_data="nav:reminders:create")],
-            [InlineKeyboardButton(text="📋 Мои напоминания", callback_data="nav:reminders:list")],
-        ]
-    rows.append(
-        [
-            InlineKeyboardButton(text="⬅️ Назад", callback_data="nav:back"),
-            InlineKeyboardButton(text="❌ Отмена", callback_data="nav:cancel"),
+def _chat_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="⏹ Выйти из чата", callback_data="chat:exit")]
         ]
     )
-    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def _back_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="⬅️ В меню", callback_data="menu:back")]
+        ]
+    )
 
 
 def _setup_prompt(provider: str, step: str) -> str:
@@ -182,13 +178,15 @@ async def _model_keyboard(tg_id: int) -> InlineKeyboardMarkup:
             [InlineKeyboardButton(text="➕ OpenAI", callback_data="model:add:openai")],
             [InlineKeyboardButton(text="➕ xAI", callback_data="model:add:xai")],
             [InlineKeyboardButton(text="🆓 Ollama разработчика", callback_data="model:add:ollama")],
+            [InlineKeyboardButton(text="⬅️ В меню", callback_data="menu:back")],
         ]
     )
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-async def _send_models(message: Message) -> None:
-    profiles = await _model_profiles(message.from_user.id)
+async def _send_models(message: Message, user_id: int | None = None) -> None:
+    tg_id = user_id if user_id is not None else message.from_user.id
+    profiles = await _model_profiles(tg_id)
     text = (
         "🤖 <b>Мои модели</b>\n\n"
         "Выберите активную модель или добавьте новую.\n"
@@ -200,7 +198,20 @@ async def _send_models(message: Message) -> None:
             f"{' — активна' if profile.is_active else ''}"
             for profile in profiles
         )
-    await message.answer(text, reply_markup=await _model_keyboard(message.from_user.id))
+    await message.answer(
+        text,
+        parse_mode=ParseMode.HTML,
+        reply_markup=await _model_keyboard(tg_id),
+    )
+
+
+def _profile_id_from_callback(callback_data: str) -> int | None:
+    try:
+        value = callback_data.rsplit(":", 1)[1]
+        profile_id = int(value)
+    except (IndexError, TypeError, ValueError):
+        return None
+    return profile_id if profile_id > 0 else None
 
 async def on_startup():
     from db.database import global_db_manager
@@ -252,94 +263,168 @@ async def send_message(tg_id: int, text: str) -> None:
 
 def register_handlers(dp: Dispatcher):
 
-    @dp.message(Command("start"))
-    async def handle_start(message: Message):
+    @dp.callback_query.outer_middleware()
+    async def callback_owner_guard(handler, event, data):
+        callback = event
+        message = callback.message
+        if (
+            message is None
+            or message.chat.type != "private"
+            or callback.from_user.id != message.chat.id
+        ):
+            await callback.answer(
+                "Это меню доступно только владельцу чата.",
+                show_alert=True,
+            )
+            return
+        return await handler(event, data)
+
+    async def show_menu(message: Message, state: FSMContext, *, edit: bool = False):
+        await state.set_state(TelegramMode.navigation)
+        text = (
+            "🏠 <b>PortableAgent</b>\n\n"
+            "Выберите действие. Календарь и напоминания доступны обычным текстом "
+            "в режиме чата."
+        )
+        if edit:
+            await message.edit_text(text, reply_markup=_menu_keyboard())
+        else:
+            await message.answer(text, reply_markup=_menu_keyboard())
+
+    async def enter_chat(message: Message, state: FSMContext):
+        await get_config().redis_client.delete(_model_setup_key(message.from_user.id))
+        await state.set_state(TelegramMode.chat)
         await message.answer(
-            "Добро пожаловать! Выберите раздел или напишите сообщение.",
-            reply_markup=_main_keyboard(),
+            "💬 <b>Режим чата включён</b>\n\n"
+            "Пишите обычным языком: я помогу с вопросами, календарём и напоминаниями.\n"
+            "Для выхода нажмите кнопку ниже или используйте /cancel.",
+            reply_markup=_chat_keyboard(),
         )
 
+    async def leave_chat(message: Message, state: FSMContext, *, edit: bool = False):
+        await state.set_state(TelegramMode.navigation)
+        if edit:
+            await message.edit_text("Вы вышли из чата.", reply_markup=_menu_keyboard())
+        else:
+            await message.answer(
+                "Вы вышли из чата.",
+                reply_markup=ReplyKeyboardRemove(),
+            )
+            await message.answer(
+                "Открываю меню.",
+                reply_markup=_menu_keyboard(),
+            )
+
+    @dp.message(Command("start"))
+    async def handle_start(message: Message, state: FSMContext):
+        await show_menu(message, state)
+
+    @dp.message(Command("menu"))
+    async def handle_menu(message: Message, state: FSMContext):
+        await show_menu(message, state)
+
+    @dp.message(Command("chat"))
+    async def handle_chat(message: Message, state: FSMContext):
+        await enter_chat(message, state)
+
+    @dp.message(Command("calendar"))
+    async def handle_calendar_alias(message: Message, state: FSMContext):
+        await enter_chat(message, state)
+        await message.answer(
+            "Календарь работает через обычный язык. Например: "
+            "«покажи мои события на сегодня»."
+        )
+
+    @dp.message(Command("reminders"))
+    async def handle_reminders_alias(message: Message, state: FSMContext):
+        await enter_chat(message, state)
+        await message.answer(
+            "Напоминания работают через обычный язык. Например: "
+            "«напомни завтра в 10:00 позвонить врачу»."
+        )
+
+    @dp.message(Command("cancel"))
+    async def handle_cancel(message: Message, state: FSMContext):
+        await get_config().redis_client.delete(_model_setup_key(message.from_user.id))
+        current_state = await state.get_state()
+        if current_state == TelegramMode.chat.state:
+            await leave_chat(message, state)
+            return
+        await state.set_state(TelegramMode.navigation)
+        await message.answer("Текущее действие отменено.", reply_markup=_menu_keyboard())
+
     @dp.message(Command("web"))
-    async def handle_web_login(message: Message):
+    async def handle_web_login(
+        message: Message,
+        state: FSMContext,
+        user_id: int | None = None,
+    ):
+        await state.set_state(TelegramMode.navigation)
+        tg_id = user_id if user_id is not None else message.from_user.id
         code = generate_login_code()
         redis = get_config().redis_client
-        cooldown_key = f"web_login_cooldown:{message.from_user.id}"
+        cooldown_key = f"web_login_cooldown:{tg_id}"
         if not await redis.set(cooldown_key, "1", ex=LOGIN_CODE_COOLDOWN, nx=True):
             await message.answer("Код уже отправлен. Подождите минуту.")
             return
-        await redis.setex(login_code_key(code), LOGIN_CODE_TTL, str(message.from_user.id))
+        await redis.setex(login_code_key(code), LOGIN_CODE_TTL, str(tg_id))
         await message.answer(
             "Код для входа в Web UI: "
-            f"{code}\nКод действителен 5 минут и одноразовый."
+            f"{code}\nКод действителен 5 минут и одноразовый.",
+            reply_markup=_back_keyboard(),
         )
 
     @dp.message(Command("models"))
-    async def handle_models(message: Message):
+    async def handle_models(message: Message, state: FSMContext):
+        await state.set_state(TelegramMode.navigation)
         await _send_models(message)
 
-    @dp.message(F.text == "🤖 Модели")
-    async def handle_models_button(message: Message):
-        await _send_models(message)
-
-    @dp.message(F.text == "💬 Чат")
-    async def handle_chat_button(message: Message):
+    @dp.message(Command("help"))
+    async def handle_help(message: Message, state: FSMContext):
+        await state.set_state(TelegramMode.navigation)
         await message.answer(
-            "Режим чата включён. Напишите сообщение.",
-            reply_markup=_main_keyboard(),
+            "ℹ️ <b>Как пользоваться</b>\n\n"
+            "Войдите в чат командой /chat и пишите обычным языком.\n"
+            "Примеры:\n"
+            "• «Что у меня сегодня в календаре?»\n"
+            "• «Напомни завтра в 10:00 позвонить врачу»\n"
+            "• «Перенеси встречу с Анной на пятницу»\n\n"
+            "Для выхода используйте /cancel.",
+            reply_markup=_back_keyboard(),
         )
 
-    @dp.message(F.text == "📅 Календарь")
-    async def handle_calendar_button(message: Message):
-        await message.answer(
-            "Выберите действие календаря:",
-            reply_markup=_section_keyboard("calendar"),
-        )
-
-    @dp.message(F.text == "⏰ Напоминания")
-    async def handle_reminders_button(message: Message):
-        await message.answer(
-            "Выберите действие с напоминаниями:",
-            reply_markup=_section_keyboard("reminders"),
-        )
-
-    @dp.callback_query(F.data.startswith("nav:calendar:"))
-    async def handle_calendar_navigation(callback: CallbackQuery):
-        action = callback.data.rsplit(":", 1)[1]
-        prompts = {
-            "create": "Опишите событие: например, «создай встречу завтра в 10:00»",
-            "list": "Напишите, какие события показать: например, «покажи мои события на сегодня»",
-        }
-        await callback.message.edit_text(
-            prompts.get(action, "Выберите действие календаря."),
-            reply_markup=_section_keyboard("calendar"),
-        )
+    @dp.callback_query(F.data == "menu:chat")
+    async def handle_chat_callback(callback: CallbackQuery, state: FSMContext):
         await callback.answer()
+        await enter_chat(callback.message, state)
 
-    @dp.callback_query(F.data.startswith("nav:reminders:"))
-    async def handle_reminders_navigation(callback: CallbackQuery):
-        action = callback.data.rsplit(":", 1)[1]
-        prompts = {
-            "create": "Опишите напоминание: например, «напомни позвонить через час»",
-            "list": "Напишите, какие напоминания показать: например, «покажи активные напоминания»",
-        }
-        await callback.message.edit_text(
-            prompts.get(action, "Выберите действие с напоминаниями."),
-            reply_markup=_section_keyboard("reminders"),
-        )
+    @dp.callback_query(F.data == "menu:models")
+    async def handle_models_callback(callback: CallbackQuery, state: FSMContext):
+        await state.set_state(TelegramMode.navigation)
         await callback.answer()
+        await _send_models(callback.message, callback.from_user.id)
 
-    @dp.callback_query(F.data == "nav:back")
-    async def handle_navigation_back(callback: CallbackQuery):
-        await callback.message.answer(
-            "Выберите раздел.",
-            reply_markup=_main_keyboard(),
-        )
+    @dp.callback_query(F.data == "menu:web")
+    async def handle_web_callback(callback: CallbackQuery, state: FSMContext):
+        await state.set_state(TelegramMode.navigation)
         await callback.answer()
+        await handle_web_login(callback.message, state, callback.from_user.id)
 
-    @dp.callback_query(F.data == "nav:cancel")
-    async def handle_navigation_cancel(callback: CallbackQuery):
-        await callback.message.edit_text("Раздел закрыт.")
+    @dp.callback_query(F.data == "menu:help")
+    async def handle_help_callback(callback: CallbackQuery, state: FSMContext):
+        await state.set_state(TelegramMode.navigation)
         await callback.answer()
+        await handle_help(callback.message, state)
+
+    @dp.callback_query(F.data == "menu:back")
+    async def handle_menu_back(callback: CallbackQuery, state: FSMContext):
+        await callback.answer()
+        await show_menu(callback.message, state, edit=True)
+
+    @dp.callback_query(F.data == "chat:exit")
+    async def handle_chat_exit(callback: CallbackQuery, state: FSMContext):
+        await callback.answer()
+        await leave_chat(callback.message, state, edit=True)
 
     @dp.callback_query(F.data == "guided:model:providers")
     async def handle_guided_providers(callback: CallbackQuery):
@@ -370,30 +455,6 @@ def register_handlers(dp: Dispatcher):
             json.dumps({"provider": provider, "step": "model"}),
         )
         await callback.answer()
-
-    @dp.message(F.text == "ℹ️ Помощь")
-    async def handle_help_button(message: Message):
-        await message.answer(
-            "Напишите запрос обычным текстом. В разделе «Модели» можно "
-            "добавить или активировать профиль. /web открывает Web UI.",
-            reply_markup=_main_keyboard(),
-        )
-
-    @dp.message(F.text == "⚙️ Настройки")
-    async def handle_settings_button(message: Message):
-        await message.answer(
-            "Настройки модели находятся в разделе «Модели». "
-            "Для входа в Web UI используйте /web.",
-            reply_markup=_main_keyboard(),
-        )
-
-    @dp.message(F.text == "❌ Отмена")
-    async def handle_cancel_button(message: Message):
-        await get_config().redis_client.delete(_model_setup_key(message.from_user.id))
-        await message.answer(
-            "Текущая операция отменена.",
-            reply_markup=_main_keyboard(),
-        )
 
     @dp.callback_query(F.data.startswith("model:add:"))
     async def handle_model_add(callback: CallbackQuery):
@@ -430,7 +491,13 @@ def register_handlers(dp: Dispatcher):
 
     @dp.callback_query(F.data.startswith("model:activate:"))
     async def handle_model_activate(callback: CallbackQuery):
-        profile_id = int(callback.data.rsplit(":", 1)[1])
+        profile_id = _profile_id_from_callback(callback.data)
+        if profile_id is None:
+            await callback.answer("Некорректная кнопка. Откройте список моделей заново.", show_alert=True)
+            await callback.message.edit_reply_markup(
+                reply_markup=await _model_keyboard(callback.from_user.id)
+            )
+            return
         try:
             profile = await get_model_profiles().activate(
                 callback.from_user.id, profile_id
@@ -449,7 +516,13 @@ def register_handlers(dp: Dispatcher):
 
     @dp.callback_query(F.data.startswith("model:delete:"))
     async def handle_model_delete(callback: CallbackQuery):
-        profile_id = int(callback.data.rsplit(":", 1)[1])
+        profile_id = _profile_id_from_callback(callback.data)
+        if profile_id is None:
+            await callback.answer("Некорректная кнопка. Откройте список моделей заново.", show_alert=True)
+            await callback.message.edit_reply_markup(
+                reply_markup=await _model_keyboard(callback.from_user.id)
+            )
+            return
         try:
             deleted = await get_model_profiles().delete(
                 callback.from_user.id, profile_id
@@ -467,55 +540,21 @@ def register_handlers(dp: Dispatcher):
         )
         await callback.answer("Модель удалена" if deleted else "Модель не найдена")
 
-    @dp.message(Command("cancel"))
-    async def handle_model_cancel(message: Message):
-        await get_config().redis_client.delete(_model_setup_key(message.from_user.id))
-        await message.answer("Настройка модели отменена.")
-
-    @dp.message(Command("switch_model"))
-    async def handle_switch_model(message: Message):
-        llms = LLMInitializer.get_llms()
-        wrappers = LLMInitializer.get_wrappers()
-
-        keyboard = [
-            [InlineKeyboardButton(
-                text=f"{_model_id(llm)} ({type(wrapper).__name__})",
-                callback_data=f"switch_model:{_model_id(llm)}",
-            )]
-            for llm, wrapper in zip(llms, wrappers)
-        ]
-
-        await message.answer(
-            text="Choose a model:",
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard),
-        )
-
-    @dp.callback_query(F.data.startswith("switch_model:"))
-    async def handle_model_callback(callback: CallbackQuery):
-        model_id = callback.data.split(":", 1)[1]
-        tg_id = callback.from_user.id
-
-        target_llm = next(
-            (llm for llm in LLMInitializer.get_llms() if _model_id(llm) == model_id),
-            None,
-        )
-
-        if target_llm is None:
-            await callback.answer("⚠️ Model not found", show_alert=True)
-            return
-
-        LLMInitializer.set_selected(target_llm)
-        AgentsFactory.reset(tg_id=tg_id) 
-
-        await callback.answer(f"✅ Model switched: {model_id}")
-        await callback.message.edit_text(f"Model switched to: {model_id}")
-
     @dp.message(F.text)
-    async def handle_text(message: Message):
+    async def handle_text(message: Message, state: FSMContext):
         tg_id = message.from_user.id
         chat_id = message.chat.id
         text = message.text.strip()
         cfg = get_config()
+
+        if await state.get_state() != TelegramMode.chat.state:
+            setup_raw = await cfg.redis_client.get(_model_setup_key(tg_id))
+            if not setup_raw:
+                await message.answer(
+                    "Чтобы начать разговор, используйте /chat.",
+                    reply_markup=_menu_keyboard(),
+                )
+                return
 
         try:
             guided_request = detect_model_setup_request(text)

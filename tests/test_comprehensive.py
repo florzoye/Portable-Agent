@@ -19,7 +19,11 @@ from src.services.web.app import (
     current_model,
     _get_session_context,
 )
-from src.services.telegram.bot.handlers import _setup_keyboard, _setup_prompt
+from src.services.telegram.bot.handlers import (
+    _profile_id_from_callback,
+    _setup_keyboard,
+    _setup_prompt,
+)
 from src.services.web.one_time_code import (
     generate_login_code,
     normalize_login_code,
@@ -337,29 +341,83 @@ class ComprehensiveTests(unittest.IsolatedAsyncioTestCase):
         )[2]
         self.assertIn("await message.delete()", failure_branch)
 
-    def test_telegram_main_keyboard_exposes_core_navigation(self):
+    def test_telegram_navigation_uses_commands_and_inline_screens(self):
         from pathlib import Path
 
         source = Path("src/services/telegram/bot/handlers.py").read_text(
             encoding="utf-8"
         )
         for label in (
-            "💬 Чат",
-            "🤖 Модели",
-            "📅 Календарь",
-            "⏰ Напоминания",
+            "💬 Открыть чат",
+            "🤖 Мои модели",
+            "🌐 Войти в Web UI",
             "ℹ️ Помощь",
-            "⚙️ Настройки",
-            "❌ Отмена",
         ):
             self.assertIn(label, source)
         self.assertIn('@dp.message(Command("start"))', source)
-        self.assertIn("is_persistent=True", source)
-        self.assertIn("def _section_keyboard(section: str)", source)
-        self.assertIn('callback_data="nav:back"', source)
-        self.assertIn('callback_data="nav:cancel"', source)
-        self.assertIn('F.data.startswith("nav:calendar:")', source)
-        self.assertIn('F.data.startswith("nav:reminders:")', source)
+        self.assertIn('@dp.message(Command("menu"))', source)
+        self.assertIn('@dp.message(Command("chat"))', source)
+        self.assertIn('@dp.message(Command("cancel"))', source)
+        self.assertIn('callback_data="chat:exit"', source)
+        self.assertIn("callback_owner_guard", source)
+        self.assertIn('message.chat.type != "private"', source)
+        self.assertIn("class TelegramMode", Path(
+            "src/services/telegram/bot/states.py"
+        ).read_text(encoding="utf-8"))
+        self.assertNotIn("ReplyKeyboardMarkup", source)
+        self.assertNotIn("nav:calendar:", source)
+        self.assertNotIn("nav:reminders:", source)
+
+    def test_telegram_commands_are_registered_for_chat_navigation(self):
+        from pathlib import Path
+
+        source = Path("src/services/telegram/bot/main.py").read_text(
+            encoding="utf-8"
+        )
+        for command in (
+            'command="start"',
+            'command="menu"',
+            'command="chat"',
+            'command="cancel"',
+            'command="calendar"',
+            'command="reminders"',
+            'command="models"',
+            'command="web"',
+            'command="help"',
+        ):
+            self.assertIn(command, source)
+
+    def test_telegram_model_callbacks_reject_malformed_profile_ids(self):
+        self.assertEqual(_profile_id_from_callback("model:activate:42"), 42)
+        self.assertEqual(_profile_id_from_callback("model:delete:1"), 1)
+        self.assertIsNone(_profile_id_from_callback("model:activate:not-an-id"))
+        self.assertIsNone(_profile_id_from_callback("model:delete:0"))
+        self.assertIsNone(_profile_id_from_callback("model:activate:"))
+
+    def test_telegram_callback_flows_preserve_callback_user_identity(self):
+        from pathlib import Path
+
+        source = Path("src/services/telegram/bot/handlers.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn(
+            "await _send_models(callback.message, callback.from_user.id)",
+            source,
+        )
+        self.assertIn(
+            "await handle_web_login(callback.message, state, callback.from_user.id)",
+            source,
+        )
+        self.assertIn("def _profile_id_from_callback", source)
+
+    def test_agent_prompt_preserves_event_and_reminder_semantics(self):
+        from pathlib import Path
+
+        source = Path("src/agents/prompts/system.py").read_text(encoding="utf-8")
+        self.assertIn("meaning is unchanged", source)
+        self.assertIn("Never silently change dates", source)
+        self.assertIn("Require explicit intent", source)
+        self.assertIn("identify the exact existing event/reminder", source)
 
     def test_guided_model_setup_uses_safe_intents_and_confirmation(self):
         from pathlib import Path

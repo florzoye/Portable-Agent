@@ -149,9 +149,39 @@ docker compose \
 
 ### 3. Open the interfaces
 
-- **Telegram**: open your bot and send any message
+- **Telegram**: open your bot and send `/start`
 - **Web UI**: `http://localhost:8080`
 - **Flower** (Celery monitor): `http://localhost:5555`
+
+### Telegram interaction
+
+Telegram uses slash commands for navigation and inline buttons for service
+screens:
+
+| Command | Purpose |
+|---|---|
+| `/start`, `/menu` | Open the inline menu |
+| `/chat` | Enter conversation mode |
+| `/cancel` | Leave chat mode or cancel model setup |
+| `/models` | Manage tenant model profiles |
+| `/web` | Get a one-time Web UI login code |
+| `/help` | Show usage examples |
+| `/calendar`, `/reminders` | Open chat with a focused natural-language hint |
+
+When chat mode is active, navigation controls are hidden. Use `/cancel` or the
+inline **Exit chat** button to return to the menu. Calendar and reminders are
+handled by the agent from ordinary language, for example:
+
+```text
+Покажи мои события на сегодня
+Напомни завтра в 10:00 позвонить врачу
+Перенеси встречу с Анной на пятницу
+```
+
+The agent may correct grammar or lightly improve an event/reminder text, but
+must preserve the meaning, date, time, timezone, attendees, and requested
+action. It asks for clarification before ambiguous changes and confirmation
+before destructive operations.
 - **Monitoring dashboard**: `http://localhost:8010/dashboard` (local development override only)
 
 The Calendar REST API is intentionally reachable only from the internal Docker
