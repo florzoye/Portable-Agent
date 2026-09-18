@@ -42,7 +42,7 @@ class PostgreSQLIntegrationTests(unittest.IsolatedAsyncioTestCase):
             self.engine,
             required_tables=("users", "google_tokens", "model_profiles"),
         )
-        self.assertEqual(status.current_version, 2)
+        self.assertEqual(status.current_version, 3)
         self.assertFalse(status.upgrade_required)
         self.assertTrue(
             await migrate_database(
@@ -58,7 +58,7 @@ class PostgreSQLIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 text("DROP INDEX uq_model_profiles_one_active_per_user")
             )
             await connection.execute(
-                text("DELETE FROM schema_migrations WHERE version = 2")
+                text("DELETE FROM schema_migrations WHERE version >= 2")
             )
         status = await check_database(self.engine)
         self.assertEqual(status.current_version, 1)

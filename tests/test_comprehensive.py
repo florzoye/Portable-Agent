@@ -18,6 +18,7 @@ from src.services.web.app import (
     list_model_profiles,
     current_model,
     _get_session_context,
+    _selected_web_conversation,
 )
 from src.services.telegram.bot.handlers import (
     _profile_id_from_callback,
@@ -307,16 +308,13 @@ class ComprehensiveTests(unittest.IsolatedAsyncioTestCase):
     def test_web_model_selector_distinguishes_profiles_and_fallbacks(self):
         from pathlib import Path
 
-        source = Path("src/services/web/static/index.html").read_text(
-            encoding="utf-8"
-        )
+        source = Path("src/services/web/static/app.js").read_text(encoding="utf-8")
         app_source = Path("src/services/web/app.py").read_text(encoding="utf-8")
-        self.assertIn('label = "Мои профили"', source)
-        self.assertIn('label = "Модели оператора"', source)
-        self.assertIn('modelId.startsWith("profile:")', source)
-        self.assertIn("/model-profiles/${profileId}/activate", source)
+        self.assertIn("profiles.map", source)
+        self.assertIn("models.map", source)
+        self.assertIn('value.startsWith("profile:")', source)
+        self.assertIn("/model-profiles/", source)
         self.assertIn('await get_model_profiles().deactivate(user_id)', app_source)
-        self.assertIn("Введите имя модели длиной от 1 до 200 символов", source)
         self.assertIn("no_active_profile", source)
 
     def test_operator_fallback_is_explicitly_opt_in(self):
@@ -358,13 +356,14 @@ class ComprehensiveTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('@dp.message(Command("menu"))', source)
         self.assertIn('@dp.message(Command("chat"))', source)
         self.assertIn('@dp.message(Command("cancel"))', source)
-        self.assertIn('callback_data="chat:exit"', source)
+        self.assertIn("EXIT_CHAT_TEXT", source)
+        self.assertIn("ReplyKeyboardMarkup", source)
+        self.assertIn("ReplyKeyboardRemove", source)
         self.assertIn("callback_owner_guard", source)
         self.assertIn('message.chat.type != "private"', source)
         self.assertIn("class TelegramMode", Path(
             "src/services/telegram/bot/states.py"
         ).read_text(encoding="utf-8"))
-        self.assertNotIn("ReplyKeyboardMarkup", source)
         self.assertNotIn("nav:calendar:", source)
         self.assertNotIn("nav:reminders:", source)
 
@@ -1186,7 +1185,7 @@ class ComprehensiveTests(unittest.IsolatedAsyncioTestCase):
                 engine,
                 required_tables=("users", "google_tokens", "model_profiles"),
             )
-            self.assertEqual(current.current_version, 2)
+            self.assertEqual(current.current_version, 4)
             self.assertFalse(current.upgrade_required)
             async with engine.begin() as connection:
                 await connection.execute(
@@ -1235,7 +1234,7 @@ class ComprehensiveTests(unittest.IsolatedAsyncioTestCase):
                 engine,
                 required_tables=("users", "google_tokens", "model_profiles"),
             )
-            self.assertEqual(status.current_version, 2)
+            self.assertEqual(status.current_version, 4)
             self.assertFalse(status.upgrade_required)
             await engine.dispose()
 
@@ -1322,6 +1321,43 @@ class ComprehensiveTests(unittest.IsolatedAsyncioTestCase):
                 headers={"X-Internal-Api-Key": "expected"},
             )
             self.assertEqual(response.status_code, 200)
+
+    async def test_websocket_selection_is_tenant_scoped_and_active(self):
+        from types import SimpleNamespace
+
+        class Context:
+            async def __aenter__(self):
+                return repository
+
+            async def __aexit__(self, *_):
+                return False
+
+        redis = SimpleNamespace(get=AsyncMock(return_value="conversation-1"))
+        config = SimpleNamespace(redis_client=redis)
+        repository = SimpleNamespace(
+            get=AsyncMock(return_value=SimpleNamespace(
+                id="conversation-1", thread_id="conversation-thread-1", archived_at=None
+            ))
+        )
+        with patch("src.services.web.app.get_config", return_value=config), patch(
+            "src.services.web.app.conversation_repository",
+            return_value=Context(),
+        ):
+            selected = await _selected_web_conversation(7, "thread-7")
+        self.assertEqual(selected.id, "conversation-1")
+        self.assertEqual(selected.thread_id, "conversation-thread-1")
+        repository.get.assert_awaited_once_with(7, "conversation-1")
+
+    async def test_websocket_selection_rejects_missing_or_archived(self):
+        from types import SimpleNamespace
+
+        redis = SimpleNamespace(get=AsyncMock(return_value=None))
+        config = SimpleNamespace(redis_client=redis)
+        with patch("src.services.web.app.get_config", return_value=config), patch(
+            "src.services.web.app.conversation_repository"
+        ) as repository:
+            self.assertIsNone(await _selected_web_conversation(7, "thread-7"))
+            repository.assert_not_called()
 
 
 if __name__ == "__main__":

@@ -1,6 +1,17 @@
 from datetime import datetime
 from typing import Annotated, Optional
-from sqlalchemy import Boolean, Integer, String, DateTime, func, ForeignKey, Index, Text, text
+from sqlalchemy import (
+    Boolean,
+    Integer,
+    String,
+    DateTime,
+    func,
+    ForeignKey,
+    Index,
+    Text,
+    text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 strnullable = Annotated[Optional[str], mapped_column(String, nullable=True)]
@@ -107,3 +118,54 @@ class ModelProfile(Base):
         onupdate=func.now(),
         nullable=False,
     )
+
+
+class WebConversation(Base):
+    """A browser conversation owned by exactly one authenticated web user."""
+
+    __tablename__ = "web_conversations"
+    __table_args__ = (Index("ix_web_conversations_user_updated", "user_id", "updated_at"),)
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.tg_id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    thread_id: Mapped[str] = mapped_column(String(128), nullable=False, unique=True, index=True)
+    title: Mapped[str] = mapped_column(
+        String(200), nullable=False, default="New conversation", server_default="New conversation"
+    )
+    archived_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+    messages: Mapped[list["WebMessage"]] = relationship(
+        back_populates="conversation", cascade="all, delete-orphan", lazy="noload"
+    )
+
+
+class WebMessage(Base):
+    __tablename__ = "web_messages"
+    __table_args__ = (
+        UniqueConstraint("conversation_id", "client_message_id", name="uq_web_messages_client_id"),
+        Index("ix_web_messages_conversation_created", "conversation_id", "created_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    conversation_id: Mapped[str] = mapped_column(
+        ForeignKey("web_conversations.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    role: Mapped[str] = mapped_column(String(16), nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="complete", server_default="complete"
+    )
+    client_message_id: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    conversation: Mapped["WebConversation"] = relationship(back_populates="messages", lazy="noload")

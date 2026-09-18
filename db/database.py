@@ -70,7 +70,13 @@ class Database:
         await migrate_database(
             engine,
             Base.metadata,
-            extra_tables=("users", "google_tokens", "model_profiles"),
+            extra_tables=(
+                "users",
+                "google_tokens",
+                "model_profiles",
+                "web_conversations",
+                "web_messages",
+            ),
         )
         self.logger.info("✅ All tables created")
 

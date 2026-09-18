@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from sqlalchemy.schema import MetaData
 
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 4
 VERSION_TABLE = "schema_migrations"
 
 
@@ -36,9 +36,89 @@ def _add_active_profile_index(sync_connection, metadata: MetaData) -> None:
     )
 
 
+def _add_web_conversation_tables(sync_connection, metadata: MetaData) -> None:
+    metadata.create_all(
+        sync_connection,
+        tables=[
+            metadata.tables["web_conversations"],
+            metadata.tables["web_messages"],
+        ],
+    )
+
+
+def _migrate_web_conversation_tenant_identity(sync_connection, metadata: MetaData) -> None:
+    """Change stage-3 conversation ownership from users.id to users.tg_id."""
+    inspector = inspect(sync_connection)
+    if "web_conversations" not in inspector.get_table_names():
+        return
+    columns = {column["name"] for column in inspector.get_columns("web_conversations")}
+    if "user_id" not in columns or "users" not in inspector.get_table_names():
+        return
+
+    if sync_connection.dialect.name == "sqlite":
+        # SQLite cannot alter a referenced column constraint in place.  Rebuild
+        # only this table and translate existing internal IDs before dropping it.
+        sync_connection.execute(
+            text(
+                "CREATE TABLE web_conversations_stage4 ("
+                "id VARCHAR(64) PRIMARY KEY, "
+                "user_id INTEGER NOT NULL REFERENCES users(tg_id) ON DELETE CASCADE, "
+                "thread_id VARCHAR(128) NOT NULL UNIQUE, "
+                "title VARCHAR(200) NOT NULL, archived_at DATETIME NULL, "
+                "created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, "
+                "updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)"
+            )
+        )
+        sync_connection.execute(
+            text(
+                "INSERT INTO web_conversations_stage4 "
+                "(id, user_id, thread_id, title, archived_at, created_at, updated_at) "
+                "SELECT c.id, u.tg_id, c.thread_id, c.title, c.archived_at, c.created_at, c.updated_at "
+                "FROM web_conversations c JOIN users u ON u.id = c.user_id"
+            )
+        )
+        sync_connection.execute(text("DROP TABLE web_conversations"))
+        sync_connection.execute(
+            text("ALTER TABLE web_conversations_stage4 RENAME TO web_conversations")
+        )
+        sync_connection.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS ix_web_conversations_user_updated "
+                "ON web_conversations (user_id, updated_at)"
+            )
+        )
+        sync_connection.execute(
+            text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_web_conversations_thread_id "
+                "ON web_conversations(thread_id)"
+            )
+        )
+        return
+
+    sync_connection.execute(
+        text(
+            "UPDATE web_conversations c SET user_id = u.tg_id "
+            "FROM users u WHERE u.id = c.user_id"
+        )
+    )
+    for constraint in ("web_conversations_user_id_fkey",):
+        sync_connection.execute(
+            text(f"ALTER TABLE web_conversations DROP CONSTRAINT IF EXISTS {constraint}")
+        )
+    sync_connection.execute(
+        text(
+            "ALTER TABLE web_conversations ADD CONSTRAINT "
+            "web_conversations_user_id_fkey FOREIGN KEY (user_id) "
+            "REFERENCES users(tg_id) ON DELETE CASCADE"
+        )
+    )
+
+
 MIGRATIONS: dict[int, Migration] = {
     1: _create_baseline,
     2: _add_active_profile_index,
+    3: _add_web_conversation_tables,
+    4: _migrate_web_conversation_tenant_identity,
 }
 
 

@@ -1,5 +1,6 @@
 import pathlib
 import asyncio
+import json
 import os
 import secrets
 import time
@@ -11,7 +12,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Requ
 from fastapi.responses import HTMLResponse 
 from fastapi.staticfiles import StaticFiles
 from loguru import logger
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from data import get_config
 from src.agents.chat import AgentInvoker, StreamSender
@@ -44,12 +45,14 @@ from src.services.models.providers import ModelProvider
 from src.agents.providers.base import ProviderConfigurationError
 from src.agents.providers.base import provider_user_message
 from db.database import global_db_manager
+from src.services.web.conversations import conversation_repository, conversation_dict, message_dict
 
 STATIC_DIR = pathlib.Path(__file__).parent / "static"
 SESSION_COOKIE = "portable_session"
 SESSION_TTL = 86400
 SESSION_KEY_PREFIX = "web_session:"
 SESSION_THREAD_PREFIX = "web_session_thread:"
+SESSION_CONVERSATION_PREFIX = "web_session_conversation:"
 MAX_WEBSOCKET_MESSAGE_SIZE = 4000
 AGENT_INVOKE_TIMEOUT = 120
 WEBSOCKET_RATE_WINDOW = 60
@@ -131,6 +134,38 @@ class WebSocketSender(StreamSender):
         await self.ws.send_json({"type": "done"})
 
 
+async def _selected_web_conversation(user_id: int, thread_id: str):
+    """Return the selected conversation only when it is owned and active."""
+    conversation_id = await get_config().redis_client.get(
+        f"{SESSION_CONVERSATION_PREFIX}{thread_id}"
+    )
+    if not conversation_id:
+        return None
+    async with conversation_repository() as repo:
+        conversation = await repo.get(user_id, conversation_id)
+        if conversation is None or conversation.archived_at is not None:
+            return None
+    return conversation
+
+
+def _websocket_message(data: str) -> tuple[str, str | None]:
+    """Accept legacy text frames and the optional JSON message envelope."""
+    client_message_id = None
+    text = data
+    try:
+        payload = json.loads(data)
+    except (TypeError, ValueError):
+        payload = None
+    if isinstance(payload, dict):
+        candidate = payload.get("content", payload.get("message", payload.get("text")))
+        if isinstance(candidate, str):
+            text = candidate
+        candidate_id = payload.get("client_message_id", payload.get("clientMessageId"))
+        if isinstance(candidate_id, str) and candidate_id.strip():
+            client_message_id = candidate_id.strip()[:128]
+    return text.strip(), client_message_id
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await global_db_manager.setup()
@@ -167,6 +202,157 @@ async def health():
 async def list_models():
     """Return all available LLM models."""
     return {"models": _build_model_list()}
+
+
+class ConversationCreateRequest(BaseModel):
+    title: str = Field(default="New conversation", max_length=200)
+
+
+class ConversationRenameRequest(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+
+
+async def _select_conversation(session_id: str, conversation_id: str) -> None:
+    await get_config().redis_client.setex(
+        f"{SESSION_CONVERSATION_PREFIX}{session_id}", SESSION_TTL, conversation_id
+    )
+
+
+async def _clear_selected_conversation(session_id: str) -> None:
+    await get_config().redis_client.delete(f"{SESSION_CONVERSATION_PREFIX}{session_id}")
+
+
+@app.get("/session/{session_id}/conversation")
+async def selected_conversation(
+    session_id: str, portable_session: str | None = Cookie(default=None)
+):
+    _, thread_id = await _get_session_context(portable_session)
+    if session_id != thread_id:
+        raise HTTPException(status_code=403, detail="Session mismatch")
+    conversation_id = await get_config().redis_client.get(
+        f"{SESSION_CONVERSATION_PREFIX}{thread_id}"
+    )
+    return {"conversation_id": conversation_id}
+
+
+@app.put("/session/{session_id}/conversation/{conversation_id}")
+async def select_conversation(
+    session_id: str,
+    conversation_id: str,
+    portable_session: str | None = Cookie(default=None),
+):
+    user_id, thread_id = await _get_session_context(portable_session)
+    if session_id != thread_id:
+        raise HTTPException(status_code=403, detail="Session mismatch")
+    async with conversation_repository() as repo:
+        conversation = await repo.get(user_id, conversation_id)
+        if not conversation or conversation.archived_at is not None:
+            raise HTTPException(status_code=404, detail="Conversation not found")
+    await _select_conversation(thread_id, conversation_id)
+    return {"conversation_id": conversation_id}
+
+
+@app.get("/conversations")
+async def list_conversations(
+    portable_session: str | None = Cookie(default=None),
+    include_archived: bool = False,
+    limit: int = 50,
+    offset: int = 0,
+):
+    user_id, _ = await _get_session_context(portable_session)
+    async with conversation_repository() as repo:
+        rows = await repo.list(
+            user_id, include_archived=include_archived, limit=limit, offset=offset
+        )
+    return {"conversations": [conversation_dict(row) for row in rows]}
+
+
+@app.post("/conversations")
+async def create_conversation(
+    body: ConversationCreateRequest = ConversationCreateRequest(),
+    portable_session: str | None = Cookie(default=None),
+):
+    user_id, session_id = await _get_session_context(portable_session)
+    async with conversation_repository() as repo:
+        row = await repo.create(user_id, body.title)
+    await _select_conversation(session_id, row.id)
+    return conversation_dict(row)
+
+
+@app.get("/conversations/{conversation_id}")
+async def get_conversation(
+    conversation_id: str, portable_session: str | None = Cookie(default=None)
+):
+    user_id, _ = await _get_session_context(portable_session)
+    async with conversation_repository() as repo:
+        row = await repo.get(user_id, conversation_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    return conversation_dict(row)
+
+
+@app.patch("/conversations/{conversation_id}")
+async def rename_conversation(
+    conversation_id: str,
+    body: ConversationRenameRequest,
+    portable_session: str | None = Cookie(default=None),
+):
+    user_id, _ = await _get_session_context(portable_session)
+    async with conversation_repository() as repo:
+        row = await repo.rename(user_id, conversation_id, body.title)
+    if not row:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    return conversation_dict(row)
+
+
+@app.post("/conversations/{conversation_id}/archive")
+async def archive_conversation(
+    conversation_id: str, portable_session: str | None = Cookie(default=None)
+):
+    user_id, session_id = await _get_session_context(portable_session)
+    async with conversation_repository() as repo:
+        row = await repo.archive(user_id, conversation_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    selected = await get_config().redis_client.get(
+        f"{SESSION_CONVERSATION_PREFIX}{session_id}"
+    )
+    if selected == conversation_id:
+        await _clear_selected_conversation(session_id)
+    return conversation_dict(row)
+
+
+@app.delete("/conversations/{conversation_id}")
+async def delete_conversation(
+    conversation_id: str, portable_session: str | None = Cookie(default=None)
+):
+    user_id, session_id = await _get_session_context(portable_session)
+    async with conversation_repository() as repo:
+        deleted = await repo.delete(user_id, conversation_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    selected = await get_config().redis_client.get(
+        f"{SESSION_CONVERSATION_PREFIX}{session_id}"
+    )
+    if selected == conversation_id:
+        await _clear_selected_conversation(session_id)
+    return {"deleted": True}
+
+
+@app.get("/conversations/{conversation_id}/messages")
+async def list_messages(
+    conversation_id: str,
+    portable_session: str | None = Cookie(default=None),
+    limit: int = 50,
+    before: str | None = None,
+):
+    user_id, _ = await _get_session_context(portable_session)
+    async with conversation_repository() as repo:
+        if not await repo.get(user_id, conversation_id):
+            raise HTTPException(status_code=404, detail="Conversation not found")
+        rows = await repo.messages(user_id, conversation_id, limit, before)
+    page_size = min(max(limit, 1), 100)
+    return {"messages": [message_dict(row) for row in rows], "has_more": len(rows) == page_size}
 
 
 class CreateModelProfileRequest(BaseModel):
@@ -374,6 +560,7 @@ async def logout(
             f"{SESSION_THREAD_PREFIX}{portable_session}",
         )
         if thread_id:
+            await redis.delete(f"{SESSION_CONVERSATION_PREFIX}{thread_id}")
             clear_session_model(thread_id)
     response.delete_cookie(SESSION_COOKIE)
     emit_event("web.logout")
@@ -436,6 +623,12 @@ async def websocket_chat(websocket: WebSocket):
     except HTTPException:
         await websocket.close(code=1008, reason="Authentication required")
         return
+    conversation = await _selected_web_conversation(user_id, thread_id)
+    if conversation is None:
+        await websocket.close(code=1008, reason="Conversation unavailable")
+        return
+    conversation_id = conversation.id
+    conversation_thread_id = conversation.thread_id
     await websocket.accept()
     cfg = get_config()
     emit_event("web.websocket.connected", user_id=user_id, thread_id=thread_id)
@@ -448,7 +641,7 @@ async def websocket_chat(websocket: WebSocket):
     try:
         while True:
             data = await websocket.receive_text()
-            text = data.strip()
+            text, client_message_id = _websocket_message(data)
             if not text:
                 continue
             if len(text) > MAX_WEBSOCKET_MESSAGE_SIZE:
@@ -470,9 +663,37 @@ async def websocket_chat(websocket: WebSocket):
 
             try:
                 async with thread_lock:
+                    async with conversation_repository() as repo:
+                        duplicate = False
+                        if client_message_id:
+                            user_message = await repo.get_message_by_client_id(
+                                user_id, conversation_id, client_message_id
+                            )
+                            duplicate = user_message is not None
+                        else:
+                            user_message = None
+                        if user_message is None:
+                            user_message = await repo.add_message(
+                                user_id,
+                                conversation_id,
+                                "user",
+                                text,
+                                client_message_id=client_message_id,
+                                status="complete",
+                            )
+                        if user_message is None:
+                            await websocket.send_json({
+                                "type": "error",
+                                "content": "Conversation unavailable",
+                            })
+                            continue
+                    # A retried envelope already has a durable user message.  Do
+                    # not invoke the model a second time for it.
+                    if duplicate:
+                        continue
                     llm = await resolve_model(thread_id, user_id)
-                    agent = await get_agent_for_model(thread_id, user_id, llm)
-                    invoker = AgentInvoker(agent, thread_id)
+                    agent = await get_agent_for_model(conversation_thread_id, user_id, llm)
+                    invoker = AgentInvoker(agent, conversation_thread_id)
                     response = await asyncio.wait_for(
                         invoker.invoke(
                             user_message=text,
@@ -484,9 +705,25 @@ async def websocket_chat(websocket: WebSocket):
                     )
 
                 html = MessageRenderer.for_web(response)
+                async with conversation_repository() as repo:
+                    await repo.add_message(
+                        user_id,
+                        conversation_id,
+                        "assistant",
+                        html,
+                        status="complete",
+                    )
                 await websocket.send_json({"type": "message", "content": html})
 
             except NoActiveModelError:
+                async with conversation_repository() as repo:
+                    await repo.add_message(
+                        user_id,
+                        conversation_id,
+                        "assistant",
+                        "Сначала создайте или активируйте профиль модели",
+                        status="error",
+                    )
                 await websocket.send_json({
                     "type": "error",
                     "code": "NO_ACTIVE_MODEL",
@@ -494,9 +731,18 @@ async def websocket_chat(websocket: WebSocket):
                 })
             except Exception as error:
                 logger.exception("Agent error for session={}", thread_id)
+                safe_error = f"⚠️ {provider_user_message(error)}"
+                async with conversation_repository() as repo:
+                    await repo.add_message(
+                        user_id,
+                        conversation_id,
+                        "assistant",
+                        safe_error,
+                        status="failed",
+                    )
                 await websocket.send_json({
                     "type": "error",
-                    "content": f"⚠️ {provider_user_message(error)}",
+                    "content": safe_error,
                 })
 
     except WebSocketDisconnect:
