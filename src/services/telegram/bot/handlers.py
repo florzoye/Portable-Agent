@@ -1,5 +1,7 @@
+from email.mime import message, text
 import json
 
+from celery.states import state
 from loguru import logger
 from aiogram.filters import Command
 from aiogram import Bot, Dispatcher, F
@@ -11,6 +13,8 @@ from aiogram.types import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     ReplyKeyboardRemove,
+    ReplyKeyboardMarkup,
+    KeyboardButton,
 )
 from aiogram.fsm.context import FSMContext
 
@@ -50,6 +54,7 @@ from src.services.web.one_time_code import (
 
 _bot: Bot | None = None
 MAX_MESSAGE_LEN = 4096
+EXIT_CHAT_TEXT = "⏹ Выйти из чата"
 
 def init_telegram_sender(bot: Bot) -> None:
     global _bot
@@ -120,13 +125,13 @@ def _menu_keyboard() -> InlineKeyboardMarkup:
     )
 
 
-def _chat_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text="⏹ Выйти из чата", callback_data="chat:exit")]
-        ]
-    )
 
+def _chat_keyboard() -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup(
+        keyboard=[[KeyboardButton(text=EXIT_CHAT_TEXT)]],
+        resize_keyboard=True,
+        is_persistent=True,
+    )
 
 def _back_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
@@ -421,11 +426,6 @@ def register_handlers(dp: Dispatcher):
         await callback.answer()
         await show_menu(callback.message, state, edit=True)
 
-    @dp.callback_query(F.data == "chat:exit")
-    async def handle_chat_exit(callback: CallbackQuery, state: FSMContext):
-        await callback.answer()
-        await leave_chat(callback.message, state, edit=True)
-
     @dp.callback_query(F.data == "guided:model:providers")
     async def handle_guided_providers(callback: CallbackQuery):
         capabilities = get_model_profiles().available_providers()
@@ -546,6 +546,10 @@ def register_handlers(dp: Dispatcher):
         chat_id = message.chat.id
         text = message.text.strip()
         cfg = get_config()
+
+        if text == EXIT_CHAT_TEXT and await state.get_state() == TelegramMode.chat.state:
+            await leave_chat(message, state)
+            return
 
         if await state.get_state() != TelegramMode.chat.state:
             setup_raw = await cfg.redis_client.get(_model_setup_key(tg_id))
