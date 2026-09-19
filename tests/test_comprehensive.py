@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, patch
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy import insert
 
-from fastapi import HTTPException
+from fastapi import HTTPException, Response
 
 from src.agents.memory import normalize_memory_user_id, user_memory_path
 from src.services.calendar.mcp.common import event_list_result, event_result
@@ -14,6 +14,8 @@ from src.services.tool_result import tool_failure, tool_success
 from src.services.web.app import (
     _acquire_provider_diagnostic_slot,
     activate_model_profile,
+    code_login,
+    CodeLoginRequest,
     delete_model_profile,
     list_model_profiles,
     current_model,
@@ -74,6 +76,43 @@ class FakeRedis:
 
 
 class ComprehensiveTests(unittest.IsolatedAsyncioTestCase):
+    async def test_web_login_cookie_is_available_to_all_routes(self):
+        class LoginRedis(FakeRedis):
+            def __init__(self):
+                super().__init__({"web_login_code:12345678": "1694304302"})
+                self.attempts = 0
+
+            async def incr(self, key):
+                self.attempts += 1
+                return self.attempts
+
+            async def setex(self, key, ttl, value):
+                self.values[key] = value
+
+            async def getdel(self, key):
+                return self.values.pop(key, None)
+
+        class Config:
+            redis_client = LoginRedis()
+
+        class Client:
+            host = "test-client"
+
+        class Request:
+            client = Client()
+
+        response = Response()
+        with patch("src.services.web.app.get_config", return_value=Config()):
+            result = await code_login(
+                CodeLoginRequest(code="12345678"),
+                Request(),
+                response,
+            )
+
+        self.assertEqual(result, {"user_id": 1694304302})
+        self.assertIn("portable_session=", response.headers["set-cookie"])
+        self.assertIn("Path=/", response.headers["set-cookie"])
+
     async def test_web_profile_transport_preserves_tenant_ownership(self):
         class ProfileApplication:
             def __init__(self):

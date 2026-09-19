@@ -5,16 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="PortableAgent web chat">
   <title>AI Assistant</title>
-  <link rel="stylesheet" href="/static/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Petrona:ital,wght@0,500;0,600;1,500&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css?v=web-chat-3">
 </head>
 <body>
   <div id="app" class="app-shell">
     <aside id="sidebar" class="sidebar" aria-label="Conversations">
       <div class="sidebar-head">
-        <strong>Чаты</strong>
+        <span class="sidebar-title">Чаты</span>
         <button id="close-menu" class="icon-button mobile-only" type="button" aria-label="Закрыть меню">×</button>
       </div>
-      <button id="new-chat" class="new-chat" type="button">＋ <span>Новый чат</span></button>
+      <button id="new-chat" class="new-chat" type="button"><span class="new-chat-icon">+</span>Новый чат</button>
       <div id="conversation-state" class="list-state" role="status" aria-live="polite">Загрузка чатов…</div>
       <nav id="conversation-list" class="conversation-list" aria-label="Список разговоров"></nav>
     </aside>
@@ -22,7 +25,7 @@
     <main class="chat-shell">
       <header class="topbar">
         <button id="menu-button" class="icon-button mobile-only" type="button" aria-label="Открыть меню">☰</button>
-        <div class="brand"><span class="brand-mark">✦</span><h1>AI Assistant</h1></div>
+        <div class="brand"><span class="brand-mark" aria-hidden="true"></span><h1>AI Assistant</h1></div>
         <div class="topbar-actions">
           <label class="model-selector"><span class="sr-only">Модель</span><select id="model-select" disabled></select></label>
           <button id="manage-models" class="secondary-button" type="button">Модели</button>
@@ -37,7 +40,9 @@
       <footer class="composer-wrap">
         <div id="composer" class="composer">
           <textarea id="input" rows="1" maxlength="4000" placeholder="Введите сообщение…" disabled aria-label="Сообщение"></textarea>
-          <button id="send-btn" class="send-button" type="button" disabled aria-label="Отправить сообщение">➤</button>
+          <button id="send-btn" class="send-button" type="button" disabled aria-label="Отправить сообщение">
+            <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+          </button>
         </div>
         <p class="hint">Enter — отправить · Shift+Enter — новая строка</p>
       </footer>
@@ -56,11 +61,21 @@
   </section>
 
   <section id="auth-screen" class="auth-screen" aria-labelledby="auth-title">
-    <div class="auth-card"><h2 id="auth-title">Вход в AI Assistant</h2><p>Отправьте боту команду <code>/web</code>, затем введите одноразовый код.</p>
-      <input id="login-code" inputmode="numeric" maxlength="8" placeholder="12345678" aria-label="Одноразовый код">
-      <button id="login-button" class="primary-button" type="button">Войти</button><p id="auth-error" class="error-text" role="alert"></p>
+    <div class="auth-ticket">
+      <div class="auth-ticket-main">
+        <span class="auth-eyebrow">Вход по коду</span>
+        <h2 id="auth-title">Откройте чат</h2>
+        <p>Отправьте боту в Telegram команду <code>/web</code> — он пришлёт одноразовый код. Введите его здесь.</p>
+        <input id="login-code" class="auth-code-input" inputmode="numeric" maxlength="8" placeholder="00000000" aria-label="Одноразовый код" autocomplete="one-time-code">
+        <p id="auth-error" class="error-text" role="alert"></p>
+      </div>
+      <div class="auth-ticket-stub">
+        <span class="stub-label">Код действует</span>
+        <span class="stub-value">5 минут</span>
+        <button id="login-button" class="primary-button auth-submit" type="button">Войти</button>
+      </div>
     </div>
   </section>
-  <script src="/static/app.js" defer></script>
+  <script src="/static/app.js?v=web-chat-3" defer></script>
 </body>
 </html>

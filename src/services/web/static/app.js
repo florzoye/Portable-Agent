@@ -13,6 +13,7 @@
   };
   let ws = null, reconnectTimer = null, waiting = false, sessionId = null;
   let selectedId = null, activeModel = false, streaming = null;
+  let loginSubmitting = false;
 
   async function request(url, options) {
     const response = await fetch(url, options);
@@ -30,11 +31,41 @@
   function showAuth(message = "") { el.auth.hidden = false; el.authError.textContent = message; el.input.disabled = el.send.disabled = true; if (ws) ws.close(); }
   function hideAuth() { el.auth.hidden = true; }
 
+  // Guarded against double-submit: pressing Enter twice (or Enter then
+  // clicking) used to fire two /auth/code requests with the same one-time
+  // code. The code is single-use server-side, so the second request always
+  // failed with 401 — and the shared request() helper treats every 401 as
+  // "session expired", so the auth screen would flash back over a chat the
+  // user had, in fact, just successfully entered.
   async function login() {
+    if (loginSubmitting) return;
+    const code = el.code.value.trim();
+    if (!code) { el.authError.textContent = "Введите код"; return; }
+
+    loginSubmitting = true;
     el.login.disabled = true;
-    try { await request("/auth/code", { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({code: el.code.value.trim()}) }); hideAuth(); await bootstrap(); }
-    catch (error) { if (error.message !== "AUTH_REQUIRED") el.authError.textContent = error.message; }
-    finally { el.login.disabled = false; }
+    el.authError.textContent = "";
+    try {
+      const response = await fetch("/auth/code", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code })
+      });
+      if (!response.ok) {
+        let detail = "Не удалось войти";
+        try { detail = (await response.json()).detail || detail; } catch (_) {}
+        el.authError.textContent = detail;
+        return;
+      }
+      el.code.value = "";
+      hideAuth();
+      await bootstrap();
+    } catch (_) {
+      el.authError.textContent = "Ошибка сети, попробуйте снова";
+    } finally {
+      loginSubmitting = false;
+      el.login.disabled = false;
+    }
   }
   el.login.onclick = login; el.code.onkeydown = e => { if (e.key === "Enter") login(); };
   $("logout-button").onclick = async () => { try { await fetch("/auth/logout", {method: "POST"}); } finally { if (ws) ws.close(); showAuth("Вы вышли из аккаунта"); } };
@@ -118,11 +149,31 @@
   el.model.onchange = async () => { const value = el.model.value; el.model.disabled = true; try { if (value.startsWith("profile:")) await request(`/model-profiles/${value.slice(8)}/activate`, {method:"POST"}); else await request("/session/model", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({model_id:value.slice(9)})}); await loadModels(); } catch (error) { el.profileError.textContent = error.message; } finally { el.model.disabled = false; } };
 
   function connect() {
-    if (!selectedId) return; clearTimeout(reconnectTimer); setStatus("", "Подключение…"); const proto = location.protocol === "https:" ? "wss" : "ws"; ws = new WebSocket(`${proto}://${location.host}/ws`);
-    ws.onopen = () => { setStatus("connected", "Подключено"); updateComposer(); el.input.focus(); };
-    ws.onclose = event => { setStatus(event.code === 1008 ? "error" : "", event.code === 1008 ? "Сессия истекла" : "Переподключение…"); updateComposer(); if (event.code === 1008) showAuth("Сессия истекла, войдите снова"); else { clearTimeout(reconnectTimer); reconnectTimer = setTimeout(connect, 2000); } };
-    ws.onerror = () => ws.close();
-    ws.onmessage = event => { const message = JSON.parse(event.data); if (message.type === "chunk") return appendChunk(message.content); removeTyping(); waiting = false; if (message.type === "message") finalizeStreaming(message.content); else if (message.type === "error") { if (message.code === "NO_ACTIVE_MODEL") activeModel = false; discardStreaming(); appendBubble("assistant", message.content, true); } updateComposer(); };
+    if (!selectedId) return; clearTimeout(reconnectTimer); setStatus("", "Подключение…"); const proto = location.protocol === "https:" ? "wss" : "ws"; const socket = new WebSocket(`${proto}://${location.host}/ws`); ws = socket;
+    socket.onopen = () => { if (ws !== socket) return; setStatus("connected", "Подключено"); updateComposer(); el.input.focus(); };
+    socket.onclose = event => {
+      if (ws !== socket) return;
+      const reason = event.reason || "";
+      const authenticationFailure = event.code === 1008 && /authentication|session/i.test(reason);
+      const conversationFailure = event.code === 1008 && /conversation/i.test(reason);
+      if (authenticationFailure) {
+        setStatus("error", "\u0421\u0435\u0441\u0441\u0438\u044f \u0438\u0441\u0442\u0435\u043a\u043b\u0430");
+        showAuth("\u0421\u0435\u0441\u0441\u0438\u044f \u0438\u0441\u0442\u0435\u043a\u043b\u0430, \u0432\u043e\u0439\u0434\u0438\u0442\u0435 \u0441\u043d\u043e\u0432\u0430");
+        return;
+      }
+      if (conversationFailure) {
+        setStatus("error", "\u0427\u0430\u0442 \u043d\u0435\u0434\u043e\u0441\u0442\u0443\u043f\u0435\u043d");
+        showMessageState("\u0412\u044b\u0431\u0440\u0430\u043d\u043d\u044b\u0439 \u0447\u0430\u0442 \u043d\u0435\u0434\u043e\u0441\u0442\u0443\u043f\u0435\u043d. \u0412\u044b\u0431\u0435\u0440\u0438\u0442\u0435 \u0434\u0440\u0443\u0433\u043e\u0439 \u0447\u0430\u0442 \u0438\u043b\u0438 \u0441\u043e\u0437\u0434\u0430\u0439\u0442\u0435 \u043d\u043e\u0432\u044b\u0439.", true);
+        updateComposer();
+        return;
+      }
+      setStatus("", "\u041f\u0435\u0440\u0435\u043f\u043e\u0434\u043a\u043b\u044e\u0447\u0435\u043d\u0438\u0435...");
+      updateComposer();
+      clearTimeout(reconnectTimer);
+      reconnectTimer = setTimeout(connect, 2000);
+    };
+    socket.onerror = () => { if (ws === socket) socket.close(); };
+    socket.onmessage = event => { if (ws !== socket) return; const message = JSON.parse(event.data); if (message.type === "chunk") return appendChunk(message.content); removeTyping(); waiting = false; if (message.type === "message") finalizeStreaming(message.content); else if (message.type === "error") { if (message.code === "NO_ACTIVE_MODEL") activeModel = false; discardStreaming(); appendBubble("assistant", message.content, true); } updateComposer(); };
   }
   function appendBubble(role, content, error = false) { el.messageState.hidden = true; const wrap = document.createElement("div"); wrap.className = `msg-wrap ${role}`; const bubble = document.createElement("div"); bubble.className = `bubble${error ? " error" : ""}`; if (role === "user") bubble.textContent = content; else bubble.innerHTML = content; wrap.append(bubble); el.messages.append(wrap); return wrap; }
   function appendChunk(chunk) { if (!streaming) { removeTyping(); streaming = {wrap: appendBubble("assistant", ""), bubble: null, text:""}; streaming.bubble = streaming.wrap.querySelector(".bubble"); streaming.bubble.innerHTML = ""; } streaming.text += chunk; streaming.bubble.textContent = streaming.text; el.messages.scrollTop = el.messages.scrollHeight; }

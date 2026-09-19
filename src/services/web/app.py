@@ -535,6 +535,7 @@ async def code_login(body: CodeLoginRequest, request: Request, response: Respons
         SESSION_TTL,
         thread_id,
     )
+    response.delete_cookie(SESSION_COOKIE, path="/auth")
     response.set_cookie(
         SESSION_COOKIE,
         session_id,
@@ -542,6 +543,7 @@ async def code_login(body: CodeLoginRequest, request: Request, response: Respons
         httponly=True,
         secure=os.environ.get("WEB_COOKIE_SECURE", "false").lower() == "true",
         samesite="lax",
+        path="/",
     )
     emit_event("web.authenticated", user_id=int(user_id))
     return {"user_id": int(user_id)}
@@ -562,7 +564,8 @@ async def logout(
         if thread_id:
             await redis.delete(f"{SESSION_CONVERSATION_PREFIX}{thread_id}")
             clear_session_model(thread_id)
-    response.delete_cookie(SESSION_COOKIE)
+    response.delete_cookie(SESSION_COOKIE, path="/")
+    response.delete_cookie(SESSION_COOKIE, path="/auth")
     emit_event("web.logout")
     return {"logged_out": True}
 
@@ -625,6 +628,11 @@ async def websocket_chat(websocket: WebSocket):
         return
     conversation = await _selected_web_conversation(user_id, thread_id)
     if conversation is None:
+        logger.warning(
+            "WebSocket conversation unavailable: session={}, user_id={}",
+            thread_id,
+            user_id,
+        )
         await websocket.close(code=1008, reason="Conversation unavailable")
         return
     conversation_id = conversation.id
