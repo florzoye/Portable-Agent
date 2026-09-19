@@ -25,8 +25,8 @@ A modular AI-powered assistant with Google Calendar integration, LangGraph agent
 
 ### Hosted model profiles
 
-Users authenticate through Telegram and use `/models` to manage their model
-profiles. OpenAI and xAI profiles use the user's own API key; keys are
+Users authenticate through Telegram with a one-time Web UI link from `/web`
+and use `/models` to manage their model profiles. OpenAI and xAI profiles use the user's own API key; keys are
 encrypted before they are stored and are never returned by the API or echoed
 in Telegram. The hosted Ollama profile is managed by the operator and does
 not require a user key.
@@ -164,7 +164,7 @@ screens:
 | `/chat` | Enter conversation mode |
 | `/cancel` | Leave chat mode or cancel model setup |
 | `/models` | Manage tenant model profiles |
-| `/web` | Get a one-time Web UI login code |
+| `/web` | Get a one-time Web UI login link |
 | `/help` | Show usage examples |
 | `/calendar`, `/reminders` | Open chat with a focused natural-language hint |
 
@@ -312,9 +312,9 @@ LANGFUSE_BASE_URL=https://cloud.langfuse.com
 
 ### Web UI login
 
-To create a one-time Web UI login code, send `/web` to the Telegram bot.
-Enter the received 8-digit code on the Web UI within five minutes. Each code
-is accepted only once.
+To create a one-time Web UI login link, send `/web` to the Telegram bot and
+press the link button within five minutes. Each link is accepted only once.
+Configure `WEB_PUBLIC_URL` to the public origin of the Web UI.
 
 ### Monitoring
 

@@ -16,7 +16,7 @@
   let loginSubmitting = false;
 
   async function request(url, options) {
-    const response = await fetch(url, options);
+    const response = await fetch(url, {...options, credentials: "same-origin"});
     if (response.status === 401) { showAuth("Сессия истекла, войдите снова"); throw new Error("AUTH_REQUIRED"); }
     if (!response.ok) {
       let detail = "Операция не выполнена";
@@ -49,6 +49,7 @@
       const response = await fetch("/auth/code", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
         body: JSON.stringify({ code })
       });
       if (!response.ok) {
@@ -58,8 +59,7 @@
         return;
       }
       el.code.value = "";
-      hideAuth();
-      await bootstrap();
+      window.location.replace("/?authenticated=1");
     } catch (_) {
       el.authError.textContent = "Ошибка сети, попробуйте снова";
     } finally {
@@ -191,5 +191,14 @@
     } catch (error) { if (error.message !== "AUTH_REQUIRED") showMessageState("Не удалось загрузить чаты. Попробуйте обновить.", true); }
   }
   $("new-chat").onclick = createConversation;
-  fetch("/auth/me").then(response => { if (response.ok) { hideAuth(); bootstrap(); } }).catch(() => {});
+  fetch("/auth/me", {credentials: "same-origin"}).then(response => {
+    if (response.ok) {
+      hideAuth();
+      bootstrap();
+    } else if (response.status === 401) {
+      showAuth("Откройте одноразовую ссылку из Telegram");
+    }
+  }).catch(() => {
+    showAuth("Не удалось проверить сессию. Обновите страницу");
+  });
 })();

@@ -16,6 +16,8 @@ from src.services.web.app import (
     activate_model_profile,
     code_login,
     CodeLoginRequest,
+    current_user,
+    link_login,
     delete_model_profile,
     list_model_profiles,
     current_model,
@@ -29,6 +31,7 @@ from src.services.telegram.bot.handlers import (
 )
 from src.services.web.one_time_code import (
     generate_login_code,
+    login_token_key,
     normalize_login_code,
 )
 from utils.observability import emit_event, timed_event
@@ -112,6 +115,34 @@ class ComprehensiveTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result, {"user_id": 1694304302})
         self.assertIn("portable_session=", response.headers["set-cookie"])
         self.assertIn("Path=/", response.headers["set-cookie"])
+
+        session_id = next(
+            key.removeprefix("web_session:")
+            for key in Config.redis_client.values
+            if key.startswith("web_session:")
+        )
+        with patch("src.services.web.app.get_config", return_value=Config()):
+            current = await current_user(session_id)
+        self.assertEqual(current, {"user_id": 1694304302})
+
+    async def test_web_login_link_is_single_use_and_sets_session_cookie(self):
+        class LinkRedis(FakeRedis):
+            async def getdel(self, key):
+                return self.values.pop(key, None)
+
+            async def setex(self, key, ttl, value):
+                self.values[key] = value
+
+        class Config:
+            redis_client = LinkRedis({login_token_key("token"): "1694304302"})
+
+        with patch("src.services.web.app.get_config", return_value=Config()):
+            response = await link_login("token")
+
+        self.assertEqual(response.status_code, 303)
+        self.assertEqual(response.headers["location"], "/")
+        self.assertIn("portable_session=", response.headers["set-cookie"])
+        self.assertNotIn(login_token_key("token"), Config.redis_client.values)
 
     async def test_web_profile_transport_preserves_tenant_ownership(self):
         class ProfileApplication:

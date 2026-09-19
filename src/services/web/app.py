@@ -9,7 +9,7 @@ from contextlib import asynccontextmanager
 from contextlib import suppress
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Request, Response, Cookie
-from fastapi.responses import HTMLResponse 
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from loguru import logger
 from pydantic import BaseModel, Field
@@ -35,8 +35,10 @@ from utils.renderers import MessageRenderer
 from src.services.web.one_time_code import (
     LOGIN_ATTEMPT_LIMIT,
     LOGIN_ATTEMPT_WINDOW,
+    LOGIN_LINK_TTL,
     login_attempt_key,
     login_code_key,
+    login_token_key,
     normalize_login_code,
 )
 from utils.observability import emit_event
@@ -490,6 +492,33 @@ class CodeLoginRequest(BaseModel):
     code: str
 
 
+async def _authenticate_user(user_id: int, response: Response) -> None:
+    cfg = get_config()
+    session_id = secrets.token_urlsafe(32)
+    thread_id = secrets.token_urlsafe(24)
+    await cfg.redis_client.setex(
+        f"{SESSION_KEY_PREFIX}{session_id}",
+        SESSION_TTL,
+        str(user_id),
+    )
+    await cfg.redis_client.setex(
+        f"{SESSION_THREAD_PREFIX}{session_id}",
+        SESSION_TTL,
+        thread_id,
+    )
+    response.delete_cookie(SESSION_COOKIE, path="/auth")
+    response.set_cookie(
+        SESSION_COOKIE,
+        session_id,
+        max_age=SESSION_TTL,
+        httponly=True,
+        secure=os.environ.get("WEB_COOKIE_SECURE", "false").lower() == "true",
+        samesite="lax",
+        path="/",
+    )
+    emit_event("web.authenticated", user_id=int(user_id))
+
+
 async def _get_session_context(session_id: str | None) -> tuple[int, str]:
     if not session_id:
         raise HTTPException(status_code=401, detail="Authentication required")
@@ -523,30 +552,20 @@ async def code_login(body: CodeLoginRequest, request: Request, response: Respons
     if user_id is None:
         raise HTTPException(status_code=401, detail="Invalid or expired login code")
 
-    session_id = secrets.token_urlsafe(32)
-    thread_id = secrets.token_urlsafe(24)
-    await cfg.redis_client.setex(
-        f"{SESSION_KEY_PREFIX}{session_id}",
-        SESSION_TTL,
-        str(user_id),
-    )
-    await cfg.redis_client.setex(
-        f"{SESSION_THREAD_PREFIX}{session_id}",
-        SESSION_TTL,
-        thread_id,
-    )
-    response.delete_cookie(SESSION_COOKIE, path="/auth")
-    response.set_cookie(
-        SESSION_COOKIE,
-        session_id,
-        max_age=SESSION_TTL,
-        httponly=True,
-        secure=os.environ.get("WEB_COOKIE_SECURE", "false").lower() == "true",
-        samesite="lax",
-        path="/",
-    )
-    emit_event("web.authenticated", user_id=int(user_id))
+    await _authenticate_user(int(user_id), response)
     return {"user_id": int(user_id)}
+
+
+@app.get("/auth/link")
+async def link_login(token: str):
+    user_id = await get_config().redis_client.getdel(login_token_key(token))
+    if user_id is None:
+        raise HTTPException(status_code=401, detail="Invalid or expired login link")
+    response = RedirectResponse("/", status_code=303)
+    await _authenticate_user(int(user_id), response)
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    return response
 
 
 @app.post("/auth/logout")

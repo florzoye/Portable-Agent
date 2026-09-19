@@ -60,12 +60,12 @@
     <p id="profile-error" class="error-text" role="alert"></p>
   </section>
 
-  <section id="auth-screen" class="auth-screen" aria-labelledby="auth-title">
+  <section id="auth-screen" class="auth-screen" aria-labelledby="auth-title" hidden>
     <div class="auth-ticket">
       <div class="auth-ticket-main">
         <span class="auth-eyebrow">Вход по коду</span>
         <h2 id="auth-title">Откройте чат</h2>
-        <p>Отправьте боту в Telegram команду <code>/web</code> — он пришлёт одноразовый код. Введите его здесь.</p>
+        <p>Отправьте боту в Telegram команду <code>/web</code> и откройте одноразовую ссылку.</p>
         <input id="login-code" class="auth-code-input" inputmode="numeric" maxlength="8" placeholder="00000000" aria-label="Одноразовый код" autocomplete="one-time-code">
         <p id="auth-error" class="error-text" role="alert"></p>
       </div>
@@ -76,6 +76,6 @@
       </div>
     </div>
   </section>
-  <script src="/static/app.js?v=web-chat-3" defer></script>
+  <script src="/static/app.js?v=web-chat-6" defer></script>
 </body>
 </html>

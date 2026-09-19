@@ -1,4 +1,5 @@
 import json
+import os
 
 from loguru import logger
 from aiogram.filters import Command
@@ -47,7 +48,9 @@ from src.services.web.one_time_code import (
     LOGIN_CODE_COOLDOWN,
     LOGIN_CODE_TTL,
     generate_login_code,
+    generate_login_token,
     login_code_key,
+    login_token_key,
 )
 
 _bot: Bot | None = None
@@ -71,6 +74,9 @@ def _current_login_code_key(tg_id: int) -> str:
     so a freshly issued code can invalidate whatever came before it."""
     return f"web_login_current_code:{tg_id}"
 
+
+def _current_login_token_key(tg_id: int) -> str:
+    return f"web_login_current_token:{tg_id}"
 
 def _setup_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
@@ -373,24 +379,40 @@ def register_handlers(dp: Dispatcher):
         redis = get_config().redis_client
         cooldown_key = f"web_login_cooldown:{tg_id}"
         if not await redis.set(cooldown_key, "1", ex=LOGIN_CODE_COOLDOWN, nx=True):
-            await message.answer("Код уже отправлен. Подождите минуту.")
+            await message.answer("Ссылка уже отправлена. Подождите минуту.")
             return
 
         code = generate_login_code()
+        token = generate_login_token()
 
         current_code_key = _current_login_code_key(tg_id)
         previous_code = await redis.getdel(current_code_key)
         if previous_code:
             await redis.delete(login_code_key(previous_code))
+        current_token_key = _current_login_token_key(tg_id)
+        previous_token = await redis.getdel(current_token_key)
+        if previous_token:
+            await redis.delete(login_token_key(previous_token))
 
         await redis.setex(login_code_key(code), LOGIN_CODE_TTL, str(tg_id))
         await redis.setex(current_code_key, LOGIN_CODE_TTL, code)
+        web_url = os.environ.get("WEB_PUBLIC_URL", "").rstrip("/")
+        if not web_url:
+            await message.answer(
+                "Web UI временно не настроен: администратор должен задать WEB_PUBLIC_URL."
+            )
+            return
+        await redis.setex(login_token_key(token), LOGIN_CODE_TTL, str(tg_id))
+        await redis.setex(current_token_key, LOGIN_CODE_TTL, token)
         await message.answer(
-            "Код для входа в Web UI: "
-            f"{code}\nКод действителен 5 минут и одноразовый.\n"
-            "Если вы запрашивали код раньше — он больше не действует, "
-            "используйте только этот.",
-            reply_markup=_back_keyboard(),
+            "Откройте Web UI по одноразовой ссылке. "
+            "Ссылка действительна 5 минут и работает только один раз.",
+            reply_markup=InlineKeyboardMarkup(
+                inline_keyboard=[
+                    [InlineKeyboardButton(text="🌐 Открыть Web UI", url=f"{web_url}/auth/link?token={token}")],
+                    [InlineKeyboardButton(text="⬅️ В меню", callback_data="menu:back")],
+                ]
+            ),
         )
 
     @dp.message(Command("models"))
